@@ -16,6 +16,8 @@ create table if not exists payments (
   asset_issuer text,
   recipient text not null,
   description text,
+  memo text,
+  memo_type text,
   webhook_url text,
   status text not null default 'pending',
   tx_id text,

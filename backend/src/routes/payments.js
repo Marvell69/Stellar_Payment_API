@@ -8,6 +8,8 @@ const router = express.Router();
 
 const REQUIRED_FIELDS = ["amount", "asset", "recipient"];
 
+const VALID_MEMO_TYPES = ["text", "id", "hash", "return"];
+
 function validateCreatePayment(body) {
   for (const field of REQUIRED_FIELDS) {
     if (!body[field]) {
@@ -20,10 +22,21 @@ function validateCreatePayment(body) {
   }
 
   const asset = String(body.asset || "").toUpperCase();
-  const hasIssuer =
-    body.asset_issuer || (asset === "USDC" && process.env.USDC_ISSUER);
-  if (asset !== "XLM" && !hasIssuer) {
+  if (asset !== "XLM" && !body.asset_issuer) {
     return "asset_issuer is required for non-native assets";
+  }
+
+  if (body.memo && !body.memo_type) {
+    return "memo_type is required when memo is provided";
+  }
+  if (body.memo_type && !body.memo) {
+    return "memo is required when memo_type is provided";
+  }
+  if (
+    body.memo_type &&
+    !VALID_MEMO_TYPES.includes(body.memo_type.toLowerCase())
+  ) {
+    return `Invalid memo_type. Must be one of: ${VALID_MEMO_TYPES.join(", ")}`;
   }
 
   return null;
@@ -42,9 +55,7 @@ router.post("/create-payment", async (req, res, next) => {
     const paymentLink = `${paymentLinkBase}/pay/${paymentId}`;
 
     const asset = String(req.body.asset || "").toUpperCase();
-    const assetIssuer =
-      req.body.asset_issuer ||
-      (asset === "USDC" ? process.env.USDC_ISSUER : null);
+    const assetIssuer = req.body.asset_issuer || null;
 
     const payload = {
       id: paymentId,
@@ -54,6 +65,8 @@ router.post("/create-payment", async (req, res, next) => {
       asset_issuer: assetIssuer,
       recipient: req.body.recipient,
       description: req.body.description || null,
+      memo: req.body.memo || null,
+      memo_type: req.body.memo_type ? req.body.memo_type.toLowerCase() : null,
       webhook_url: req.body.webhook_url || null,
       status: "pending",
       tx_id: null,
@@ -84,7 +97,7 @@ router.get("/payment-status/:id", async (req, res, next) => {
     const { data, error } = await supabase
       .from("payments")
       .select(
-        "id, amount, asset, asset_issuer, recipient, description, status, tx_id, created_at"
+        "id, amount, asset, asset_issuer, recipient, description, memo, memo_type, status, tx_id, created_at"
       )
       .eq("id", req.params.id)
       .maybeSingle();
@@ -109,7 +122,7 @@ router.post("/verify-payment/:id", async (req, res, next) => {
     const { data, error } = await supabase
       .from("payments")
       .select(
-        "id, amount, asset, asset_issuer, recipient, status, tx_id, webhook_url, merchants(webhook_secret)"
+        "id, amount, asset, asset_issuer, recipient, status, tx_id, memo, memo_type, webhook_url, merchants(webhook_secret)"
       )
       .eq("id", req.params.id)
       .maybeSingle();
@@ -131,7 +144,9 @@ router.post("/verify-payment/:id", async (req, res, next) => {
       recipient: data.recipient,
       amount: data.amount,
       assetCode: data.asset,
-      assetIssuer: data.asset_issuer
+      assetIssuer: data.asset_issuer,
+      memo: data.memo,
+      memoType: data.memo_type
     });
 
     if (!match) {

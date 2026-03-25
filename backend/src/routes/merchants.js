@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase.js";
 
 const router = express.Router();
 
-const REQUIRED_FIELDS = ["email", "business_name", "notification_email"];
+const REQUIRED_FIELDS = ["email"];
 
 function validateRegisterMerchant(body) {
   for (const field of REQUIRED_FIELDS) {
@@ -18,7 +18,7 @@ function validateRegisterMerchant(body) {
   if (!emailRegex.test(body.email)) {
     return "Invalid email format";
   }
-  if (!emailRegex.test(body.notification_email)) {
+  if (body.notification_email && !emailRegex.test(body.notification_email)) {
     return "Invalid notification_email format";
   }
 
@@ -29,14 +29,16 @@ function validateRegisterMerchant(body) {
  * POST /register
  * Creates a new merchant profile and returns an API key.
  */
-router.post("/register", async (req, res, next) => {
+router.post("/register-merchant", async (req, res, next) => {
   try {
     const error = validateRegisterMerchant(req.body || {});
     if (error) {
       return res.status(400).json({ error });
     }
 
-    const { email, business_name, notification_email } = req.body;
+    const { email } = req.body;
+    const business_name = req.body.business_name || email.split("@")[0];
+    const notification_email = req.body.notification_email || email;
 
     // Check if merchant already exists
     const { data: existing } = await supabase

@@ -47,20 +47,84 @@ function paymentMatchesAsset(payment, asset) {
   );
 }
 
+/**
+ * Wraps Horizon SDK errors into descriptive, consumer-friendly Error objects.
+ */
+function handleHorizonError(err, context = "") {
+  const status = err?.response?.status;
+
+  if (status === 429) {
+    const error = new Error(
+      "Horizon rate limit exceeded. Please retry after a short wait."
+    );
+    error.status = 429;
+    return error;
+  }
+
+  if (status === 404) {
+    const error = new Error(
+      `Stellar account not found${context ? `: ${context}` : ""}`
+    );
+    error.status = 404;
+    return error;
+  }
+
+  if (status && status >= 400 && status < 500) {
+    const detail = err?.response?.data?.detail || err.message;
+    const error = new Error(`Horizon request error (${status}): ${detail}`);
+    error.status = status;
+    return error;
+  }
+
+  if (status && status >= 500) {
+    const error = new Error(
+      `Horizon server error (${status}). The Stellar network may be experiencing issues.`
+    );
+    error.status = 502;
+    return error;
+  }
+
+  // Network / connection errors (ECONNREFUSED, timeout, etc.)
+  const error = new Error(
+    `Unable to connect to Horizon (${HORIZON_URL}): ${err.message}`
+  );
+  error.status = 502;
+  return error;
+}
+
+/**
+ * Returns true when the on-chain transaction memo matches the expected values.
+ * If no memo is expected the check is skipped (backward-compatible).
+ */
+function memoMatches(tx, expectedMemo, expectedMemoType) {
+  const txMemoType = (tx.memo_type || "none").toLowerCase();
+  const wantType = (expectedMemoType || "text").toLowerCase();
+
+  if (txMemoType !== wantType) return false;
+  return String(tx.memo) === String(expectedMemo);
+}
+
 export async function findMatchingPayment({
   recipient,
   amount,
   assetCode,
-  assetIssuer
+  assetIssuer,
+  memo,
+  memoType
 }) {
   const asset = resolveAsset(assetCode, assetIssuer);
 
-  const page = await server
-    .payments()
-    .forAccount(recipient)
-    .order("desc")
-    .limit(200)
-    .call();
+  let page;
+  try {
+    page = await server
+      .payments()
+      .forAccount(recipient)
+      .order("desc")
+      .limit(200)
+      .call();
+  } catch (err) {
+    throw handleHorizonError(err, recipient);
+  }
 
   for (const payment of page.records) {
     if (payment.type !== "payment") {
@@ -73,6 +137,23 @@ export async function findMatchingPayment({
 
     if (!amountsMatch(amount, payment.amount)) {
       continue;
+    }
+
+    // If a memo is expected, fetch the parent transaction and compare
+    if (memo != null && memo !== "") {
+      try {
+        const tx = await server
+          .transactions()
+          .transaction(payment.transaction_hash)
+          .call();
+
+        if (!memoMatches(tx, memo, memoType)) {
+          continue;
+        }
+      } catch (_txErr) {
+        // Cannot verify memo — skip this candidate
+        continue;
+      }
     }
 
     return {

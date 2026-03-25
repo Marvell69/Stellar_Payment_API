@@ -17,7 +17,7 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/api", paymentsRouter);
-app.use("/api/merchants", merchantsRouter);
+app.use("/api", merchantsRouter);
 
 app.use((err, req, res, next) => {
   const status = err.status || 500;
