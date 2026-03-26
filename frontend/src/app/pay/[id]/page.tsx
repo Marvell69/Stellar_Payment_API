@@ -391,6 +391,7 @@ export default function PaymentPage() {
           Scan with Freighter or any Stellar wallet
         </p>
         <div className="sm:hidden">
+          {/* Mobile-only SEP-0007 fallback for manual wallet paste */}
           <button
             type="button"
             onClick={() => setShowRawIntent((prev) => !prev)}
