@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { registerMerchant, type Merchant } from "../lib/auth";
 import CopyButton from "./CopyButton";
+import toast from "react-hot-toast";
 
 export default function RegistrationForm() {
   const [email, setEmail] = useState("");
@@ -20,8 +21,11 @@ export default function RegistrationForm() {
     try {
       const data = await registerMerchant(email, businessName, notificationEmail);
       setRegisteredMerchant(data.merchant);
+      toast.success("Merchant registered successfully!");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to register merchant");
+      const message = err instanceof Error ? err.message : "Failed to register merchant";
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }

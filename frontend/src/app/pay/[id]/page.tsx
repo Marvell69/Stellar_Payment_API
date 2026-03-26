@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { isFreighterAvailable } from "@/lib/freighter";
 import { usePayment } from "@/lib/usePayment";
 import CopyButton from "@/components/CopyButton";
+import toast from "react-hot-toast";
 
 interface PaymentDetails {
   id: string;
@@ -151,6 +152,8 @@ export default function PaymentPage() {
         tx_id: result.hash,
       });
 
+      toast.success("Payment completed successfully!");
+
       // Verify the payment with the backend
       setTimeout(async () => {
         try {
@@ -161,7 +164,9 @@ export default function PaymentPage() {
         }
       }, 2000);
     } catch {
-      setError(paymentError || "Failed to process payment");
+      const message = paymentError || "Failed to process payment";
+      setError(message);
+      toast.error(message);
     }
   };
 
