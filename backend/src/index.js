@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import "dotenv/config";
 import express from "express";
 import morgan from "morgan";
 import cors from "cors";
@@ -6,7 +6,9 @@ import swaggerJsdoc from "swagger-jsdoc";
 import swaggerUi from "swagger-ui-express";
 import paymentsRouter from "./routes/payments.js";
 import merchantsRouter from "./routes/merchants.js";
+import metricsRouter from "./routes/metrics.js";
 import { requireApiKeyAuth } from "./lib/auth.js";
+import { isHorizonReachable } from "./lib/stellar.js";
 import { supabase } from "./lib/supabase.js";
 import { pool, closePool } from "./lib/db.js";
 import { validateEnvironmentVariables } from "./lib/env-validation.js";
@@ -25,52 +27,74 @@ const swaggerSpec = swaggerJsdoc({
     info: {
       title: "Stellar Payment API",
       version: "0.1.0",
-      description: "API for creating and verifying Stellar network payments"
+      description: "API for creating and verifying Stellar network payments",
     },
-    servers: [{ url: `http://localhost:${port}` }]
+    servers: [{ url: `http://localhost:${port}` }],
   },
-  apis: ["./src/routes/*.js"]
+  apis: ["./src/routes/*.js"],
 });
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
-  ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(o => o.trim())
-  : ['http://localhost:3000'];
+  ? process.env.CORS_ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+  : ["http://localhost:3000"];
 
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+  }),
+);
 
 app.use(express.json({ limit: "1mb" }));
 app.use(morgan("dev"));
 
 app.get("/health", async (req, res) => {
   try {
-    const { error } = await supabase.from("merchants").select("id").limit(1);
+    const [dbResult, horizonReachable] = await Promise.all([
+      supabase.from("merchants").select("id").limit(1),
+      isHorizonReachable(),
+    ]);
+
+    const { error } = dbResult;
 
     if (error) {
       return res.status(503).json({
         ok: false,
         service: "stellar-payment-api",
-        error: "Database unavailable"
+        error: "Database unavailable",
+        horizon_reachable: horizonReachable,
       });
     }
 
-    res.json({ ok: true, service: "stellar-payment-api" });
+    if (!horizonReachable) {
+      return res.status(503).json({
+        ok: false,
+        service: "stellar-payment-api",
+        error: "Horizon unavailable",
+        horizon_reachable: false,
+      });
+    }
+
+    res.json({
+      ok: true,
+      service: "stellar-payment-api",
+      horizon_reachable: true,
+    });
   } catch {
     res.status(503).json({
       ok: false,
       service: "stellar-payment-api",
-      error: "Database unavailable"
+      error: "Health check failed",
+      horizon_reachable: false,
     });
   }
 });
@@ -79,20 +103,24 @@ app.use("/api/create-payment", requireApiKeyAuth());
 app.use("/api/rotate-key", requireApiKeyAuth());
 app.use("/api", paymentsRouter);
 app.use("/api", merchantsRouter);
+app.use("/api", metricsRouter);
 
 app.use((err, req, res, next) => {
   const status = err.status || 500;
   res.status(status).json({
-    error: err.message || "Internal Server Error"
+    error: err.message || "Internal Server Error",
   });
 });
 
 // Verify pg pool reaches Postgres before accepting traffic
-pool.query('SELECT 1').then(() => {
-  console.log('✅ pg pool connected (Supabase pooler)');
-}).catch((err) => {
-  console.warn('⚠️  pg pool probe failed — check DATABASE_URL:', err.message);
-});
+pool
+  .query("SELECT 1")
+  .then(() => {
+    console.log("✅ pg pool connected (Supabase pooler)");
+  })
+  .catch((err) => {
+    console.warn("⚠️  pg pool probe failed — check DATABASE_URL:", err.message);
+  });
 
 const server = app.listen(port, () => {
   console.log(`API listening on http://localhost:${port}`);
@@ -103,10 +131,10 @@ function shutdown(signal) {
   console.log(`${signal} received — closing server and pg pool...`);
   server.close(async () => {
     await closePool();
-    console.log('pg pool closed. Goodbye.');
+    console.log("pg pool closed. Goodbye.");
     process.exit(0);
   });
 }
 
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT',  () => shutdown('SIGINT'));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
