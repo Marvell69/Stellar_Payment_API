@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useParams } from "next/navigation";
 import { useWallet } from "@/lib/wallet-context";
 import { usePayment } from "@/lib/usePayment";
@@ -10,6 +10,7 @@ import toast from "react-hot-toast";
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
 import { QRCodeSVG } from "qrcode.react";
+import confetti from "canvas-confetti";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -84,10 +85,10 @@ function AssetBadge({ asset }: { asset: string }) {
 // ─── Status badge ────────────────────────────────────────────────────────────
 
 const STATUS_MAP: Record<string, { label: string; classes: string }> = {
-  pending:   { label: "Awaiting Payment",  classes: "bg-yellow-500/15 text-yellow-400 border border-yellow-500/30" },
-  confirmed: { label: "Confirmed",         classes: "bg-mint/10 text-mint border border-mint/30" },
-  completed: { label: "Completed",         classes: "bg-green-500/15 text-green-400 border border-green-500/30" },
-  failed:    { label: "Failed",            classes: "bg-red-500/15 text-red-400 border border-red-500/30" },
+  pending: { label: "Awaiting Payment", classes: "bg-yellow-500/15 text-yellow-400 border border-yellow-500/30" },
+  confirmed: { label: "Confirmed", classes: "bg-mint/10 text-mint border border-mint/30" },
+  completed: { label: "Completed", classes: "bg-green-500/15 text-green-400 border border-green-500/30" },
+  failed: { label: "Failed", classes: "bg-red-500/15 text-red-400 border border-red-500/30" },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -198,52 +199,52 @@ export default function PaymentPage() {
     "Test SDF Network ; September 2015";
 
   // ── Fetch payment details ──────────────────────────────────────────────────
-  // useEffect(() => {
-  //   const controller = new AbortController();
+  useEffect(() => {
+    const controller = new AbortController();
 
-  //   const load = async () => {
-  //     try {
-  //       const res = await fetch(`${API_URL}/api/payment-status/${paymentId}`, {
-  //         signal: controller.signal,
-  //       });
-  //       if (res.status === 404) throw new Error("Payment not found.");
-  //       if (!res.ok) throw new Error("Could not load payment details.");
-  //       const data = await res.json();
-  //       setPayment(data.payment);
-  //     } catch (err: unknown) {
-  //       if (err instanceof Error && err.name === "AbortError") return;
-  //       setFetchError(err instanceof Error ? err.message : "Failed to load payment.");
-  //     } finally {
-  //       setLoading(false);
-  //     }
-  //   };
+    const load = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/payment-status/${paymentId}`, {
+          signal: controller.signal,
+        });
+        if (res.status === 404) throw new Error("Payment not found.");
+        if (!res.ok) throw new Error("Could not load payment details.");
+        const data = await res.json();
+        setPayment(data.payment);
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        setFetchError(err instanceof Error ? err.message : "Failed to load payment.");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  //   load();
-  //   return () => controller.abort();
-  // }, [paymentId]);
+    load();
+    return () => controller.abort();
+  }, [paymentId]);
 
   // ── Poll until settled ─────────────────────────────────────────────────────
-  // useEffect(() => {
-  //   if (loading || !payment) return;
-  //   const settled = ["confirmed", "completed", "failed"].includes(payment.status);
-  //   if (settled) return;
+  useEffect(() => {
+    if (loading || !payment) return;
+    const settled = ["confirmed", "completed", "failed"].includes(payment.status);
+    if (settled) return;
 
-  //   const id = setInterval(async () => {
-  //     try {
-  //       const res = await fetch(`${API_URL}/api/payment-status/${paymentId}`);
-  //       if (!res.ok) return;
-  //       const data = await res.json();
-  //       if (data.payment) setPayment(data.payment);
-  //     } catch { /* silent — retry next tick */ }
-  //   }, 5000);
+    const id = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/payment-status/${paymentId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.payment) setPayment(data.payment);
+      } catch { /* silent — retry next tick */ }
+    }, 5000);
 
-  //   return () => clearInterval(id);
-  // }, [paymentId, payment, loading]);
+    return () => clearInterval(id);
+  }, [paymentId, payment, loading]);
 
-  // // ── Wallet readiness ───────────────────────────────────────────────────────
-  // useEffect(() => {
-  //   setWalletReady(!!activeProvider);
-  // }, [activeProvider]);
+  // ── Wallet readiness ───────────────────────────────────────────────────────
+  useEffect(() => {
+    setWalletReady(!!activeProvider);
+  }, [activeProvider]);
 
   // ── Pay handler ───────────────────────────────────────────────────────────
   const handlePay = async () => {
@@ -294,7 +295,23 @@ export default function PaymentPage() {
   }
 
   const isSettled = payment.status === "confirmed" || payment.status === "completed";
-  const isFailed  = payment.status === "failed";
+  const isFailed = payment.status === "failed";
+
+  // 🎉 Confetti trigger (fires once when payment succeeds)
+  const hasCelebrated = useRef(false);
+
+  useEffect(() => {
+    if (!hasCelebrated.current && isSettled) {
+      hasCelebrated.current = true;
+
+      confetti({
+        particleCount: 120,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ["#5ef2c0", "#b8ffe2", "#ffffff"], // matches your theme
+      });
+    }
+  }, [isSettled]);
   const checkoutTheme = {
     ...DEFAULT_CHECKOUT_THEME,
     ...(payment.branding_config || {}),
@@ -364,55 +381,55 @@ export default function PaymentPage() {
           {/* Details */}
           <div className="flex flex-col gap-5 p-8">
 
-      {/* Recipient */}
-      <div className="flex flex-col gap-1.5">
-        <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-          Recipient
-        </p>
-        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 p-3">
-          <code className="flex-1 truncate font-mono text-sm text-slate-200">
-            {payment.recipient}
-          </code>
-          <CopyButton text={payment.recipient} />
-        </div>
-      </div>
-
-      {/* QR Code */}
-      <div className="flex flex-col gap-1.5">
-        <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-          Scan to Pay
-        </p>
-        <div className="flex items-center justify-center rounded-xl border border-white/10 bg-white p-4">
-          <QRCodeSVG
-            value={payment.recipient}
-            size={160}
-            level="M"
-            bgColor="#ffffff"
-            fgColor="#000000"
-          />
-        </div>
-        <p className="text-center text-xs text-slate-500">
-          Scan with Freighter or any Stellar wallet
-        </p>
-        <div className="sm:hidden">
-          {/* Mobile-only SEP-0007 fallback for manual wallet paste */}
-          <button
-            type="button"
-            onClick={() => setShowRawIntent((prev) => !prev)}
-            className="mx-auto mt-2 text-xs font-medium text-mint transition-colors hover:text-glow"
-          >
-            {showRawIntent ? "Hide raw intent link" : "View raw intent link"}
-          </button>
-          {showRawIntent && (
-            <div className="mt-3 flex items-start gap-2 rounded-lg border border-white/10 bg-black/40 p-3">
-              <code className="flex-1 break-all font-mono text-[11px] text-slate-200">
-                {buildSep7Uri(payment)}
-              </code>
-              <CopyButton text={buildSep7Uri(payment)} className="mt-0.5" />
+            {/* Recipient */}
+            <div className="flex flex-col gap-1.5">
+              <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                Recipient
+              </p>
+              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 p-3">
+                <code className="flex-1 truncate font-mono text-sm text-slate-200">
+                  {payment.recipient}
+                </code>
+                <CopyButton text={payment.recipient} />
+              </div>
             </div>
-          )}
-        </div>
-      </div>
+
+            {/* QR Code */}
+            <div className="flex flex-col gap-1.5">
+              <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                Scan to Pay
+              </p>
+              <div className="flex items-center justify-center rounded-xl border border-white/10 bg-white p-4">
+                <QRCodeSVG
+                  value={payment.recipient}
+                  size={160}
+                  level="M"
+                  bgColor="#ffffff"
+                  fgColor="#000000"
+                />
+              </div>
+              <p className="text-center text-xs text-slate-500">
+                Scan with Freighter or any Stellar wallet
+              </p>
+              <div className="sm:hidden">
+                {/* Mobile-only SEP-0007 fallback for manual wallet paste */}
+                <button
+                  type="button"
+                  onClick={() => setShowRawIntent((prev) => !prev)}
+                  className="mx-auto mt-2 text-xs font-medium text-mint transition-colors hover:text-glow"
+                >
+                  {showRawIntent ? "Hide raw intent link" : "View raw intent link"}
+                </button>
+                {showRawIntent && (
+                  <div className="mt-3 flex items-start gap-2 rounded-lg border border-white/10 bg-black/40 p-3">
+                    <code className="flex-1 break-all font-mono text-[11px] text-slate-200">
+                      {buildSep7Uri(payment)}
+                    </code>
+                    <CopyButton text={buildSep7Uri(payment)} className="mt-0.5" />
+                  </div>
+                )}
+              </div>
+            </div>
 
             {/* Date */}
             <div className="flex flex-col gap-1">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import PaymentDetailModal from "@/components/PaymentDetailModal";
 import {
   useHydrateMerchantStore,
@@ -42,6 +42,10 @@ export default function RecentPayments() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -66,6 +70,8 @@ export default function RecentPayments() {
         setLoading(false);
         return;
       }
+
+      if (page !== 1) setIsFetchingMore(true);
 
       const apiUrl =
         process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -92,14 +98,20 @@ export default function RecentPayments() {
       if (!response.ok) throw new Error("Failed to fetch payments");
 
       const data: PaginatedResponse = await response.json();
-      setPayments(data.payments ?? []);
+
+      setPayments((prev) =>
+        page === 1 ? data.payments ?? [] : [...prev, ...(data.payments ?? [])]
+      );
+
       setTotalPages(data.total_pages ?? 1);
       setTotalCount(data.total_count ?? 0);
+      setHasMore(page < (data.total_pages ?? 1));
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "Failed to load payments");
     } finally {
       setLoading(false);
+      setIsFetchingMore(false);
     }
   };
 
@@ -113,9 +125,24 @@ export default function RecentPayments() {
     return () => controller.abort();
   }, [apiKey, page, hydrated, filters]);
 
+  useEffect(() => {
+    if (!loadMoreRef.current || !hasMore) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        setPage((prev) => prev + 1);
+      }
+    });
+
+    observer.observe(loadMoreRef.current);
+
+    return () => observer.disconnect();
+  }, [hasMore]);
+
   const handleFilterChange = (key: keyof FilterState, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
-    setPage(1); // Reset to first page when filters change
+    setPage(1);
+    setPayments([]);
   };
 
   const clearFilter = (key: keyof FilterState) => {
@@ -136,6 +163,7 @@ export default function RecentPayments() {
       dateTo: "",
     });
     setPage(1);
+    setPayments([]);
   };
 
   const hasActiveFilters =
@@ -359,283 +387,291 @@ export default function RecentPayments() {
 
   return (
     <PullToRefresh
-    onRefresh={async () => {
-      await fetchPayments();
-    }}>
-<div className="flex flex-col gap-4">
-      {/* Search and Filters */}
-      <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-        <div className="flex flex-col gap-4">
-          {/* Search Bar */}
-          <div className="flex flex-col gap-2">
-            <label htmlFor="search" className="text-xs font-medium uppercase tracking-wider text-slate-400">
-              Search
-            </label>
-            <div className="relative">
-              <input
-                id="search"
-                type="text"
-                value={filters.search}
-                onChange={(e) => handleFilterChange("search", e.target.value)}
-                placeholder="Search by payment ID or description..."
-                className="w-full rounded-xl border border-white/10 bg-black/40 py-2.5 pl-10 pr-4 text-sm text-white placeholder:text-slate-600 focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
-              />
-              <svg
-                className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+      onRefresh={async () => {
+        await fetchPayments();
+      }}>
+      <div className="flex flex-col gap-4">
+        {/* Search and Filters */}
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <div className="flex flex-col gap-4">
+            {/* Search Bar */}
+            <div className="flex flex-col gap-2">
+              <label htmlFor="search" className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                Search
+              </label>
+              <div className="relative">
+                <input
+                  id="search"
+                  type="text"
+                  value={filters.search}
+                  onChange={(e) => handleFilterChange("search", e.target.value)}
+                  placeholder="Search by payment ID or description..."
+                  className="w-full rounded-xl border border-white/10 bg-black/40 py-2.5 pl-10 pr-4 text-sm text-white placeholder:text-slate-600 focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
                 />
-              </svg>
+                <svg
+                  className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+              </div>
             </div>
+
+            {/* Filter Row */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {/* Status Filter */}
+              <div className="flex flex-col gap-2">
+                <label htmlFor="status" className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                  Status
+                </label>
+                <select
+                  id="status"
+                  value={filters.status}
+                  onChange={(e) => handleFilterChange("status", e.target.value)}
+                  className="rounded-xl border border-white/10 bg-black/40 py-2.5 px-3 text-sm text-white focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
+                >
+                  {STATUS_OPTIONS.map((status) => (
+                    <option key={status} value={status}>
+                      {status === "all" ? "All Statuses" : status.charAt(0).toUpperCase() + status.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Asset Filter */}
+              <div className="flex flex-col gap-2">
+                <label htmlFor="asset" className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                  Asset
+                </label>
+                <select
+                  id="asset"
+                  value={filters.asset}
+                  onChange={(e) => handleFilterChange("asset", e.target.value)}
+                  className="rounded-xl border border-white/10 bg-black/40 py-2.5 px-3 text-sm text-white focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
+                >
+                  {ASSET_OPTIONS.map((asset) => (
+                    <option key={asset} value={asset}>
+                      {asset === "all" ? "All Assets" : asset}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Date From */}
+              <div className="flex flex-col gap-2">
+                <label htmlFor="dateFrom" className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                  From Date
+                </label>
+                <input
+                  id="dateFrom"
+                  type="date"
+                  value={filters.dateFrom}
+                  onChange={(e) => handleFilterChange("dateFrom", e.target.value)}
+                  className="rounded-xl border border-white/10 bg-black/40 py-2.5 px-3 text-sm text-white focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50 [color-scheme:dark]"
+                />
+              </div>
+
+              {/* Date To */}
+              <div className="flex flex-col gap-2">
+                <label htmlFor="dateTo" className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                  To Date
+                </label>
+                <input
+                  id="dateTo"
+                  type="date"
+                  value={filters.dateTo}
+                  onChange={(e) => handleFilterChange("dateTo", e.target.value)}
+                  className="rounded-xl border border-white/10 bg-black/40 py-2.5 px-3 text-sm text-white focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50 [color-scheme:dark]"
+                />
+              </div>
+            </div>
+
+            {/* Filter Chips and Clear All */}
+            {hasActiveFilters && (
+              <div className="flex flex-wrap items-center gap-2 pt-2">
+                <span className="text-xs text-slate-400">Active filters:</span>
+
+                {filters.search && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
+                    Search: &quot;{filters.search}&quot;
+                    <button
+                      onClick={() => clearFilter("search")}
+                      className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
+                      aria-label="Clear search filter"
+                    >
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </span>
+                )}
+
+                {filters.status !== "all" && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
+                    Status: {filters.status}
+                    <button
+                      onClick={() => clearFilter("status")}
+                      className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
+                      aria-label="Clear status filter"
+                    >
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </span>
+                )}
+
+                {filters.asset !== "all" && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
+                    Asset: {filters.asset}
+                    <button
+                      onClick={() => clearFilter("asset")}
+                      className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
+                      aria-label="Clear asset filter"
+                    >
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </span>
+                )}
+
+                {filters.dateFrom && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
+                    From: {filters.dateFrom}
+                    <button
+                      onClick={() => clearFilter("dateFrom")}
+                      className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
+                      aria-label="Clear from date filter"
+                    >
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </span>
+                )}
+
+                {filters.dateTo && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
+                    To: {filters.dateTo}
+                    <button
+                      onClick={() => clearFilter("dateTo")}
+                      className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
+                      aria-label="Clear to date filter"
+                    >
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </span>
+                )}
+
+                <button
+                  onClick={clearAllFilters}
+                  className="ml-auto text-xs font-medium text-slate-400 underline underline-offset-4 hover:text-white"
+                >
+                  Clear all
+                </button>
+              </div>
+            )}
           </div>
-
-          {/* Filter Row */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {/* Status Filter */}
-            <div className="flex flex-col gap-2">
-              <label htmlFor="status" className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                Status
-              </label>
-              <select
-                id="status"
-                value={filters.status}
-                onChange={(e) => handleFilterChange("status", e.target.value)}
-                className="rounded-xl border border-white/10 bg-black/40 py-2.5 px-3 text-sm text-white focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
-              >
-                {STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>
-                    {status === "all" ? "All Statuses" : status.charAt(0).toUpperCase() + status.slice(1)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Asset Filter */}
-            <div className="flex flex-col gap-2">
-              <label htmlFor="asset" className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                Asset
-              </label>
-              <select
-                id="asset"
-                value={filters.asset}
-                onChange={(e) => handleFilterChange("asset", e.target.value)}
-                className="rounded-xl border border-white/10 bg-black/40 py-2.5 px-3 text-sm text-white focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
-              >
-                {ASSET_OPTIONS.map((asset) => (
-                  <option key={asset} value={asset}>
-                    {asset === "all" ? "All Assets" : asset}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Date From */}
-            <div className="flex flex-col gap-2">
-              <label htmlFor="dateFrom" className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                From Date
-              </label>
-              <input
-                id="dateFrom"
-                type="date"
-                value={filters.dateFrom}
-                onChange={(e) => handleFilterChange("dateFrom", e.target.value)}
-                className="rounded-xl border border-white/10 bg-black/40 py-2.5 px-3 text-sm text-white focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50 [color-scheme:dark]"
-              />
-            </div>
-
-            {/* Date To */}
-            <div className="flex flex-col gap-2">
-              <label htmlFor="dateTo" className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                To Date
-              </label>
-              <input
-                id="dateTo"
-                type="date"
-                value={filters.dateTo}
-                onChange={(e) => handleFilterChange("dateTo", e.target.value)}
-                className="rounded-xl border border-white/10 bg-black/40 py-2.5 px-3 text-sm text-white focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50 [color-scheme:dark]"
-              />
-            </div>
-          </div>
-
-          {/* Filter Chips and Clear All */}
-          {hasActiveFilters && (
-            <div className="flex flex-wrap items-center gap-2 pt-2">
-              <span className="text-xs text-slate-400">Active filters:</span>
-
-              {filters.search && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
-                  Search: &quot;{filters.search}&quot;
-                  <button
-                    onClick={() => clearFilter("search")}
-                    className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
-                    aria-label="Clear search filter"
-                  >
-                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </span>
-              )}
-
-              {filters.status !== "all" && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
-                  Status: {filters.status}
-                  <button
-                    onClick={() => clearFilter("status")}
-                    className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
-                    aria-label="Clear status filter"
-                  >
-                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </span>
-              )}
-
-              {filters.asset !== "all" && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
-                  Asset: {filters.asset}
-                  <button
-                    onClick={() => clearFilter("asset")}
-                    className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
-                    aria-label="Clear asset filter"
-                  >
-                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </span>
-              )}
-
-              {filters.dateFrom && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
-                  From: {filters.dateFrom}
-                  <button
-                    onClick={() => clearFilter("dateFrom")}
-                    className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
-                    aria-label="Clear from date filter"
-                  >
-                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </span>
-              )}
-
-              {filters.dateTo && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-mint/30 bg-mint/10 px-3 py-1 text-xs text-mint">
-                  To: {filters.dateTo}
-                  <button
-                    onClick={() => clearFilter("dateTo")}
-                    className="ml-1 rounded-full p-0.5 hover:bg-mint/20"
-                    aria-label="Clear to date filter"
-                  >
-                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </span>
-              )}
-
-              <button
-                onClick={clearAllFilters}
-                className="ml-auto text-xs font-medium text-slate-400 underline underline-offset-4 hover:text-white"
-              >
-                Clear all
-              </button>
-            </div>
-          )}
         </div>
-      </div>
 
-      {/* Results count */}
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-slate-400">
-          Showing {payments.length} of {totalCount} payments
-          {hasActiveFilters && ` (filtered from ${totalCount} total)`}
-        </p>
-      </div>
+        {/* Results count */}
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-slate-400">
+            Showing {payments.length} of {totalCount} payments
+            {hasActiveFilters && ` (filtered from ${totalCount} total)`}
+          </p>
+        </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-xl border border-white/10">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-white/10 bg-white/5">
-              <th className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400">
-                Status
-              </th>
-              <th className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400">
-                Amount
-              </th>
-              <th className="hidden px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400 sm:table-cell">
-                Description
-              </th>
-              <th className="hidden px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400 md:table-cell">
-                Date
-              </th>
-              <th className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400">
-                Link
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {payments.map((payment) => (
-              <tr
-                key={payment.id}
-                className="transition-colors hover:bg-white/5 cursor-pointer"
-                onClick={() => handlePaymentClick(payment.id)}
-              >
-                <td className="px-4 py-3">
-                  <span
-                    className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${payment.status === "confirmed"
+        {/* Table */}
+        <div className="overflow-x-auto rounded-xl border border-white/10">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-white/10 bg-white/5">
+                <th className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400">
+                  Status
+                </th>
+                <th className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400">
+                  Amount
+                </th>
+                <th className="hidden px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400 sm:table-cell">
+                  Description
+                </th>
+                <th className="hidden px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400 md:table-cell">
+                  Date
+                </th>
+                <th className="px-4 py-3 font-mono text-xs uppercase tracking-wider text-slate-400">
+                  Link
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {payments.map((payment) => (
+                <tr
+                  key={payment.id}
+                  className="transition-colors hover:bg-white/5 cursor-pointer"
+                  onClick={() => handlePaymentClick(payment.id)}
+                >
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${payment.status === "confirmed"
                         ? "bg-green-500/20 text-green-400"
                         : "bg-yellow-500/20 text-yellow-400"
-                      }`}
-                  >
-                    {payment.status}
-                  </span>
-                </td>
-                <td className="px-4 py-3 font-medium text-white">
-                  {payment.amount} {payment.asset}
-                </td>
-                <td className="hidden px-4 py-3 text-slate-400 sm:table-cell">
-                  {payment.description || "—"}
-                </td>
-                <td className="hidden px-4 py-3 text-slate-400 md:table-cell">
-                  {new Date(payment.created_at).toLocaleDateString()}
-                </td>
-                <td className="px-4 py-3">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handlePaymentClick(payment.id);
-                    }}
-                    className="font-mono text-xs text-mint transition-colors hover:text-glow"
-                  >
-                    View →
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                        }`}
+                    >
+                      {payment.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 font-medium text-white">
+                    {payment.amount} {payment.asset}
+                  </td>
+                  <td className="hidden px-4 py-3 text-slate-400 sm:table-cell">
+                    {payment.description || "—"}
+                  </td>
+                  <td className="hidden px-4 py-3 text-slate-400 md:table-cell">
+                    {new Date(payment.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePaymentClick(payment.id);
+                      }}
+                      className="font-mono text-xs text-mint transition-colors hover:text-glow"
+                    >
+                      View →
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
-      <PaymentDetailModal
-        paymentId={selectedPayment || ""}
-        isOpen={isModalOpen}
-        onClose={closeModal}
-      />
-    </div>
+        <div ref={loadMoreRef} className="h-10 flex items-center justify-center">
+          {hasMore ? (
+            <span className="text-xs text-slate-500">Loading more...</span>
+          ) : (
+            <span className="text-xs text-slate-600">No more payments</span>
+          )}
+        </div>
+
+        <PaymentDetailModal
+          paymentId={selectedPayment || ""}
+          isOpen={isModalOpen}
+          onClose={closeModal}
+        />
+      </div>
     </PullToRefresh>
-    
+
   );
 }
