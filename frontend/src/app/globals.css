@@ -3,12 +3,47 @@
 @tailwind utilities;
 
 :root {
+  color-scheme: light;
+}
+
+:root.dark {
   color-scheme: dark;
 }
 
 body {
+  background: radial-gradient(1200px circle at 10% -10%, #d9e8ff 0%, #f5f8ff 45%, #eef3ff 100%);
+  color: #0f172a;
+}
+
+.dark body {
   background: radial-gradient(1200px circle at 10% -10%, #15233b 0%, #0b0c10 45%, #050608 100%);
   color: #f3f5f7;
+}
+
+/* Light-mode overrides for components that currently use dark-only utility classes. */
+:root:not(.dark) .text-white,
+:root:not(.dark) .text-slate-100,
+:root:not(.dark) .text-slate-200,
+:root:not(.dark) .text-slate-300,
+:root:not(.dark) .text-slate-400 {
+  color: #0f172a;
+}
+
+:root:not(.dark) .border-white\/10,
+:root:not(.dark) .border-white\/20 {
+  border-color: rgba(15, 23, 42, 0.16);
+}
+
+:root:not(.dark) .bg-black\/40,
+:root:not(.dark) .bg-black\/50,
+:root:not(.dark) .bg-black\/60,
+:root:not(.dark) .bg-black\/70,
+:root:not(.dark) .bg-white\/5 {
+  background-color: rgba(255, 255, 255, 0.78);
+}
+
+:root:not(.dark) .hover\:bg-white\/10:hover {
+  background-color: rgba(15, 23, 42, 0.08);
 }
 
 @media (max-width: 767px) {
