@@ -40,4 +40,5 @@ scripts/failure_fixes.py
 scripts/flow_issues.py
 template_issues_v3.py
 scr
+package-lock.json
 
