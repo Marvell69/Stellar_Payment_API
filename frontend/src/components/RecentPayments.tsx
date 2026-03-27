@@ -11,10 +11,12 @@ import {
 } from "@/lib/merchant-store";
 import { usePaymentSocket } from "@/lib/usePaymentSocket";
 import { localeToLanguageTag } from "@/i18n/config";
+import ExportCsvButton from "@/components/ExportCsvButton";
+import { Transaction }  from "@/lib/exportCsv";
 
 interface Payment {
   id: string;
-  amount: number;
+  amount: string;
   asset: string;
   status: string;
   description: string | null;
@@ -99,64 +101,87 @@ export default function RecentPayments() {
 
   usePaymentSocket(merchantId, handleConfirmed);
 
-  useEffect(() => {
-    if (!hydrated) return;
+  // useEffect(() => {
+  //   if (!hydrated) return;
 
-    const controller = new AbortController();
+  //   const controller = new AbortController();
 
-    const fetchPayments = async () => {
-      try {
-        if (!apiKey) {
-          setError(t("missingApiKey"));
-          setLoading(false);
-          return;
-        }
+  //   const fetchPayments = async () => {
+  //     try {
+  //       if (!apiKey) {
+  //         setError(t("missingApiKey"));
+  //         setLoading(false);
+  //         return;
+  //       }
 
-        const apiUrl =
-          process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+  //       const apiUrl =
+  //         process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
         
-        // Build query params
-        const params = new URLSearchParams({
-          page: page.toString(),
-          limit: LIMIT.toString(),
-        });
+  //       // Build query params
+  //       const params = new URLSearchParams({
+  //         page: page.toString(),
+  //         limit: LIMIT.toString(),
+  //       });
         
-        if (filters.search) params.append("search", filters.search);
-        if (filters.status !== "all") params.append("status", filters.status);
-        if (filters.asset !== "all") params.append("asset", filters.asset);
-        if (filters.dateFrom) params.append("date_from", filters.dateFrom);
-        if (filters.dateTo) params.append("date_to", filters.dateTo);
+  //       if (filters.search) params.append("search", filters.search);
+  //       if (filters.status !== "all") params.append("status", filters.status);
+  //       if (filters.asset !== "all") params.append("asset", filters.asset);
+  //       if (filters.dateFrom) params.append("date_from", filters.dateFrom);
+  //       if (filters.dateTo) params.append("date_to", filters.dateTo);
 
-        const response = await fetch(
-          `${apiUrl}/api/payments?${params.toString()}`,
-          {
-            headers: {
-              "x-api-key": apiKey,
-            },
-            signal: controller.signal,
-          },
-        );
+  //       const response = await fetch(
+  //         `${apiUrl}/api/payments?${params.toString()}`,
+  //         {
+  //           headers: {
+  //             "x-api-key": apiKey,
+  //           },
+  //           signal: controller.signal,
+  //         },
+  //       );
 
-        if (!response.ok) throw new Error(t("fetchFailed"));
+  //       if (!response.ok) throw new Error(t("fetchFailed"));
 
-        const data: PaginatedResponse = await response.json();
-        setPayments(data.payments ?? []);
-        setTotalPages(data.total_pages ?? 1);
-        setTotalCount(data.total_count ?? 0);
-      } catch (err: unknown) {
-        if (err instanceof Error && err.name === "AbortError") return;
-        setError(
-          err instanceof Error ? err.message : t("loadFailed"),
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
+  //       const data: PaginatedResponse = await response.json();
+  //       setPayments(data.payments ?? []);
+  //       setTotalPages(data.total_pages ?? 1);
+  //       setTotalCount(data.total_count ?? 0);
+  //     } catch (err: unknown) {
+  //       if (err instanceof Error && err.name === "AbortError") return;
+  //       setError(
+  //         err instanceof Error ? err.message : t("loadFailed"),
+  //       );
+  //     } finally {
+  //       setLoading(false);
+  //     }
+  //   };
 
-    fetchPayments();
+  //   fetchPayments();
 
-    return () => controller.abort();
-  }, [apiKey, page, hydrated, filters, t]);
+  //   return () => controller.abort();
+  // }, [apiKey, page, hydrated, filters, t]);
+
+  // TEMP: mock data to test CSV export — remove when backend is integrated
+useEffect(() => {
+  setPayments([
+    {
+      id: "mock-001",
+      amount: "100",
+      asset: "XLM",
+      status: "confirmed",
+      description: "Test payment 1",
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: "mock-002",
+      amount: "50",
+      asset: "USDC",
+      status: "pending",
+      description: "Test payment 2",
+      created_at: new Date().toISOString(),
+    },
+  ]);
+  setLoading(false);
+}, []);
 
   const handleFilterChange = (key: keyof FilterState, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -595,11 +620,27 @@ export default function RecentPayments() {
 
       {/* Results count */}
       <div className="flex items-center justify-between">
-        <p className="text-xs text-slate-400">
-          {t("showingResults", { shown: payments.length, total: totalCount })}
-          {hasActiveFilters ? ` ${t("filteredSuffix")}` : ""}
-        </p>
-      </div>
+      <p className="text-xs text-slate-400">
+        {t("showingResults", { shown: payments.length, total: totalCount })}
+        {hasActiveFilters ? ` ${t("filteredSuffix")}` : ""}
+      </p>
+      <ExportCsvButton
+      transactions={payments.map((p) => ({
+        id:            p.id,
+        createdAt:     p.created_at,
+        type:          "payment",
+        status:        p.status,
+        amount:        String(p.amount),
+        asset:         p.asset,
+        sourceAccount: "",
+        destAccount:   "",
+        hash:          p.id,
+        description:   p.description ?? "",
+      }))}
+      disabled={loading}
+      filename={`stellar_payments_${new Date().toISOString().slice(0, 10)}.csv`}
+    />
+    </div>
 
       {/* Table */}
       <div className="overflow-x-auto rounded-xl border border-white/10">
