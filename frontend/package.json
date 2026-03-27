@@ -8,8 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "test:e2e": "playwright test",
-    "test:visual": "playwright test tests/e2e/vrt.spec.ts",
-    "test:visual:update": "playwright test tests/e2e/vrt.spec.ts --update-snapshots"
+    "test:visual": "playwright test tests/e2e/vrt.spec.ts --project=chromium",
+    "test:visual:update": "playwright test tests/e2e/vrt.spec.ts --project=chromium --update-snapshots"
   },
   "dependencies": {
     "@radix-ui/react-dropdown-menu": "^2.1.16",
