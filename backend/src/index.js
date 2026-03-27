@@ -1,9 +1,10 @@
 import cors from "cors";
 import "dotenv/config";
 import express from "express";
+import { createStream } from "rotating-file-stream";
 import morgan from "morgan";
-import swaggerJsdoc from "swagger-jsdoc";
 import swaggerUi from "swagger-ui-express";
+import { swaggerDocument } from './swagger.js';
 import { ZodError } from "zod";
 import createPaymentsRouter from "./routes/payments.js";
 import merchantsRouter from "./routes/merchants.js";
@@ -17,6 +18,7 @@ import { pool, closePool } from "./lib/db.js";
 import { validateEnvironmentVariables } from "./lib/env-validation.js";
 import { formatZodError } from "./lib/request-schemas.js";
 import { idempotencyMiddleware } from "./lib/idempotency.js";
+import { LOG_FORMAT } from "./lib/logging.js";
 import { closeRedisClient, connectRedisClient } from "./lib/redis.js";
 import {
   createRedisRateLimitStore,
@@ -49,8 +51,6 @@ const swaggerSpec = swaggerJsdoc({
   apis: ["./src/routes/*.js"],
 });
 
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-
 const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
   ? process.env.CORS_ALLOWED_ORIGINS.split(",").map((o) => o.trim())
   : ["http://localhost:3000"];
@@ -66,17 +66,34 @@ app.use(
       }
     },
     credentials: true,
-  }),
+  })
 );
 
 app.use(express.json({ limit: "1mb" }));
-app.use(morgan("dev"));
+
+// Create a rotating write stream
+const logDirectory = "log";
+
+// ensure log directory exists
+import { existsSync, mkdirSync } from "node:fs";
+if (!existsSync(logDirectory)) {
+  mkdirSync(logDirectory);
+}
+
+// create a rotating write stream
+const accessLogStream = createStream("access.log", {
+  interval: "1d", // rotate daily
+  path: logDirectory,
+});
+
+app.use(morgan(LOG_FORMAT, { stream: accessLogStream }));
 
 app.get("/health", async (req, res) => {
   try {
-    const [dbResult, horizonReachable] = await Promise.all([
+    const [dbResult, horizonReachable, redisReachable] = await Promise.all([
       supabase.from("merchants").select("id").limit(1),
       isHorizonReachable(),
+      redisClient.ping().then(() => true).catch(() => false),
     ]);
 
     const { error } = dbResult;
@@ -87,6 +104,7 @@ app.get("/health", async (req, res) => {
         service: "stellar-payment-api",
         error: "Database unavailable",
         horizon_reachable: horizonReachable,
+        redis_reachable: redisReachable,
       });
     }
 
@@ -96,6 +114,17 @@ app.get("/health", async (req, res) => {
         service: "stellar-payment-api",
         error: "Horizon unavailable",
         horizon_reachable: false,
+        redis_reachable: redisReachable,
+      });
+    }
+
+    if (!redisReachable) {
+      return res.status(503).json({
+        ok: false,
+        service: "stellar-payment-api",
+        error: "Redis unavailable",
+        horizon_reachable: horizonReachable,
+        redis_reachable: false,
       });
     }
 
@@ -103,6 +132,7 @@ app.get("/health", async (req, res) => {
       ok: true,
       service: "stellar-payment-api",
       horizon_reachable: true,
+      redis_reachable: true,
     });
   } catch {
     res.status(503).json({
@@ -110,6 +140,7 @@ app.get("/health", async (req, res) => {
       service: "stellar-payment-api",
       error: "Health check failed",
       horizon_reachable: false,
+      redis_reachable: false,
     });
   }
 });
@@ -130,6 +161,7 @@ app.use("/api", createPaymentsRouter({ verifyPaymentRateLimit }));
 app.use("/api", merchantsRouter);
 app.use("/api", metricsRouter);
 app.use("/api", auditRouter);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 app.use((err, req, res, next) => {
   if (err instanceof ZodError) {
