@@ -146,6 +146,17 @@ function createPaymentsRouter({
         }
       }
 
+      // Allowed-issuers check: if the merchant has configured a non-empty
+      // allowlist, only those issuer addresses may be used.
+      const allowedIssuers = req.merchant.allowed_issuers;
+      if (Array.isArray(allowedIssuers) && allowedIssuers.length > 0) {
+        if (!body.asset_issuer || !allowedIssuers.includes(body.asset_issuer)) {
+          return res.status(400).json({
+            error: "asset_issuer is not in the merchant's list of allowed issuers",
+          });
+        }
+      }
+
       const paymentId = randomUUID();
       const now = new Date().toISOString();
       const paymentLinkBase =
