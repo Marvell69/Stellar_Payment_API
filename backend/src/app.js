@@ -18,6 +18,7 @@ import { supabase } from "./lib/supabase.js";
 import { pool } from "./lib/db.js";
 import { formatZodError } from "./lib/request-schemas.js";
 import { idempotencyMiddleware } from "./lib/idempotency.js";
+import { setupSentryErrorHandler } from "./lib/sentry.js";
 import {
   createRedisRateLimitStore,
   createVerifyPaymentRateLimit,
@@ -137,6 +138,9 @@ export async function createApp({ redisClient }) {
 
   // Prometheus Metrics endpoint
   app.use("/", prometheusRouter);
+
+  // Sentry error handler — must come after all routes, before custom error handler
+  setupSentryErrorHandler(app);
 
   app.use((err, req, res, next) => {
     if (err instanceof ZodError) {

@@ -23,6 +23,7 @@
     "vitest": "^2.0.0"
   },
   "dependencies": {
+    "@sentry/node": "^10.46.0",
     "@supabase/supabase-js": "^2.49.1",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
