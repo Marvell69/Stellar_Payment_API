@@ -33,6 +33,7 @@ import {
   paymentConfirmedCounter,
   paymentConfirmationLatency,
 } from "../lib/metrics.js";
+import { sanitizeMetadataMiddleware } from "../lib/sanitize-metadata.js";
 
 const createPaymentRateLimit = createCreatePaymentRateLimit();
 
@@ -264,8 +265,8 @@ function createPaymentsRouter({
     }
   }
 
-  router.post("/create-payment", createPaymentRateLimit, validateRequest({ body: paymentSessionZodSchema }), createSession);
-  router.post("/sessions", createPaymentRateLimit, validateRequest({ body: paymentSessionZodSchema }), createSession);
+  router.post("/create-payment", createPaymentRateLimit, validateRequest({ body: paymentSessionZodSchema }), sanitizeMetadataMiddleware, createSession);
+  router.post("/sessions", createPaymentRateLimit, validateRequest({ body: paymentSessionZodSchema }), sanitizeMetadataMiddleware, createSession);
 
   /**
    * @swagger
@@ -305,7 +306,6 @@ function createPaymentsRouter({
           return res.json({ payment: cached });
         }
 
-        const { data, error } = await supabase
         let query = supabase
           .from("payments")
           .select(
@@ -417,8 +417,8 @@ function createPaymentsRouter({
         let query = supabase
           .from("payments")
           .select(
-  "id, merchant_id, amount, asset, asset_issuer, recipient, status, tx_id, memo, memo_type, webhook_url, merchants(webhook_secret, webhook_version, notification_email, email)"
-);
+            "id, merchant_id, amount, asset, asset_issuer, recipient, status, tx_id, memo, memo_type, webhook_url, merchants(webhook_secret, webhook_version, notification_email, email)"
+          );
 
         if (req.merchant?.id) {
           query = query.eq("merchant_id", req.merchant.id);
@@ -461,8 +461,8 @@ function createPaymentsRouter({
 
         const { error: updateError } = await supabase
           .from("payments")
-          .update({ 
-            status: "confirmed", 
+          .update({
+            status: "confirmed",
             tx_id: match.transaction_hash,
             completion_duration_seconds: Math.floor(latencySeconds)
           })
@@ -499,27 +499,27 @@ function createPaymentsRouter({
           });
         }
 
-       const merchantSecret = data.merchants?.webhook_secret;
-const merchantVersion = data.merchants?.webhook_version || "v1";
+        const merchantSecret = data.merchants?.webhook_secret;
+        const merchantVersion = data.merchants?.webhook_version || "v1";
 
-const webhookPayload = getPayloadForVersion(
-  merchantVersion,
-  "payment.confirmed",
-  {
-    payment_id: data.id,
-    amount: data.amount,
-    asset: data.asset,
-    asset_issuer: data.asset_issuer,
-    recipient: data.recipient,
-    tx_id: match.transaction_hash,
-  }
-);
+        const webhookPayload = getPayloadForVersion(
+          merchantVersion,
+          "payment.confirmed",
+          {
+            payment_id: data.id,
+            amount: data.amount,
+            asset: data.asset,
+            asset_issuer: data.asset_issuer,
+            recipient: data.recipient,
+            tx_id: match.transaction_hash,
+          }
+        );
 
-const webhookResult = await sendWebhook(
-  data.webhook_url,
-  webhookPayload,
-  merchantSecret
-);
+        const webhookResult = await sendWebhook(
+          data.webhook_url,
+          webhookPayload,
+          merchantSecret
+        );
 
         if (!webhookResult.ok && !webhookResult.skipped) {
           console.warn("Webhook failed", webhookResult);
@@ -1083,89 +1083,9 @@ const webhookResult = await sendWebhook(
           .eq("id", req.params.id)
           .maybeSingle();
 
-        if (error) {
-          error.status = 500;
-          throw error;
-        }
-
-  /**
-   * @swagger
-   * /api/anchor/sep24/withdraw:
-   * post:
-   * summary: Initiate a SEP-0024 hosted withdrawal (Stellar token → fiat)
-   * description: >
-   * Starts an interactive withdrawal flow with a Stellar anchor. Returns a URL
-   * the frontend opens in a popup where the user enters their bank/cash-out details.
-   * tags: [Anchor / SEP-0024]
-   * security:
-   * - ApiKeyAuth: []
-   * requestBody:
-   * required: true
-   * content:
-   * application/json:
-   * schema:
-   * type: object
-   * required: [asset_code, account]
-   * properties:
-   * asset_code:
-   * type: string
-   * description: Stellar asset code to withdraw (e.g. USDC, EURC)
-   * example: USDC
-   * account:
-   * type: string
-   * description: User's Stellar public key that holds the tokens
-   * amount:
-   * type: number
-   * description: Optional pre-fill amount for the withdrawal form
-   * anchor_domain:
-   * type: string
-   * description: Anchor domain override (defaults to ANCHOR_DOMAIN env var)
-   * responses:
-   * 200:
-   * description: Interactive withdrawal URL from the anchor
-   * content:
-   * application/json:
-   * schema:
-   * type: object
-   * properties:
-   * type:
-   * type: string
-   * example: interactive_customer_info_needed
-   * url:
-   * type: string
-   * description: Open this URL in a popup for the user to complete the withdrawal
-   * id:
-   * type: string
-   * description: Anchor transaction ID for polling
-   * anchor_domain:
-   * type: string
-   * 400:
-   * description: Missing required fields
-   * 500:
-   * description: ANCHOR_DOMAIN not configured
-   * 502:
-   * description: Anchor request failed
-   */
-  router.post("/anchor/sep24/withdraw", async (req, res, next) => {
-    try {
-      const { asset_code, account, amount, anchor_domain } = req.body;
         if (!data) {
           return res.status(404).json({ error: "Payment not found" });
         }
-
-        // No quote needed if customer is already paying with the right asset
-        const sameAsset =
-          sourceAsset.toUpperCase() === data.asset.toUpperCase() &&
-          (sourceAssetIssuer || null) === (data.asset_issuer || null);
-
-        if (sameAsset) {
-          return res.status(400).json({
-            error:
-              "Source asset is the same as destination asset. Use a direct payment.",
-          });
-        }
-
-        const SLIPPAGE = 0.01; // 1%
 
         const quote = await findStrictReceivePaths({
           sourceAccount,
@@ -1182,6 +1102,7 @@ const webhookResult = await sendWebhook(
           });
         }
 
+        const SLIPPAGE = 0.01; // 1%
         const sendMax = (
           parseFloat(quote.source_amount) *
           (1 + SLIPPAGE)
@@ -1202,6 +1123,71 @@ const webhookResult = await sendWebhook(
         next(err);
       }
     }
+  );
+
+  /**
+   * @swagger
+   * /api/anchor/sep24/withdraw:
+   *   post:
+   *     summary: Initiate a SEP-0024 hosted withdrawal
+   *     tags: [Anchor / SEP-0024]
+   */
+  router.post("/anchor/sep24/withdraw", async (req, res, next) => {
+    try {
+      const { asset_code, account, amount, anchor_domain } = req.body;
+      if (!data) {
+        return res.status(404).json({ error: "Payment not found" });
+      }
+
+      // No quote needed if customer is already paying with the right asset
+      const sameAsset =
+        sourceAsset.toUpperCase() === data.asset.toUpperCase() &&
+        (sourceAssetIssuer || null) === (data.asset_issuer || null);
+
+      if (sameAsset) {
+        return res.status(400).json({
+          error:
+            "Source asset is the same as destination asset. Use a direct payment.",
+        });
+      }
+
+      const SLIPPAGE = 0.01; // 1%
+
+      const quote = await findStrictReceivePaths({
+        sourceAccount,
+        destAssetCode: data.asset,
+        destAssetIssuer: data.asset_issuer,
+        destAmount: String(data.amount),
+        sourceAssetCode: sourceAsset,
+        sourceAssetIssuer,
+      });
+
+      if (!quote) {
+        return res.status(404).json({
+          error: "No path found for this asset pair",
+        });
+      }
+
+      const sendMax = (
+        parseFloat(quote.source_amount) *
+        (1 + SLIPPAGE)
+      ).toFixed(7);
+
+      res.json({
+        source_asset: quote.source_asset_code,
+        source_asset_issuer: quote.source_asset_issuer,
+        source_amount: quote.source_amount,
+        send_max: sendMax,
+        destination_asset: data.asset,
+        destination_asset_issuer: data.asset_issuer,
+        destination_amount: String(data.amount),
+        path: quote.path,
+        slippage: SLIPPAGE,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
   );
 
   /**
@@ -1314,7 +1300,7 @@ const webhookResult = await sendWebhook(
       }
 
       if (existing.deleted_at) {
-        return res.status(410).json({ 
+        return res.status(410).json({
           error: "Payment already deleted",
           deleted_at: existing.deleted_at
         });
