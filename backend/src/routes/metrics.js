@@ -1,7 +1,29 @@
 import express from "express";
 import { requireApiKeyAuth } from "../lib/auth.js";
+import { withMerchantContext } from "../lib/db-rls.js";
+import { validateRequest } from "../lib/validation.js";
+import { metricsVolumeQuerySchema } from "../lib/request-schemas.js";
 
 const router = express.Router();
+
+/**
+ * @swagger
+ * /api/metrics/summary:
+ *   get:
+ *     summary: Get monthly revenue summary grouped by asset
+ *     tags: [Metrics]
+ *     security:
+ *       - ApiKeyAuth: []
+ */
+router.get("/metrics/summary", requireApiKeyAuth(), async (req, res, next) => {
+  try {
+    const pool = req.app.locals.pool;
+    const result = await metricService.getMonthlySummary(pool, req.merchant.id);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
 
 /**
  * @swagger
@@ -11,65 +33,82 @@ const router = express.Router();
  *     tags: [Metrics]
  *     security:
  *       - ApiKeyAuth: []
- *     responses:
- *       200:
- *         description: Revenue data grouped by asset
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 revenue:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       asset:
- *                         type: string
- *                         description: Asset code (e.g., XLM, USDC)
- *                       asset_issuer:
- *                         type: string
- *                         nullable: true
- *                         description: Asset issuer (null for native XLM)
- *                       total:
- *                         type: string
- *                         description: Sum of amounts for this asset
- *                       count:
- *                         type: integer
- *                         description: Number of completed payments for this asset
- *       401:
- *         description: Unauthorized - invalid API key
- *       500:
- *         description: Server error
  */
 router.get("/metrics/revenue", requireApiKeyAuth(), async (req, res, next) => {
   try {
     const pool = req.app.locals.pool;
+    const result = await metricService.getRevenueByAsset(pool, req.merchant.id);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @swagger
+ * /api/metrics/volume:
+ *   get:
+ *     summary: Get per-asset daily volume for a time range
+ *     tags: [Metrics]
+ *     security:
+ *       - ApiKeyAuth: []
+ */
+router.get("/metrics/volume", requireApiKeyAuth(), validateRequest({ query: metricsVolumeQuerySchema }), async (req, res, next) => {
+  try {
+    const pool = req.app.locals.pool;
     const merchantId = req.merchant.id;
+
+    const VALID_RANGES = { "7D": 7, "30D": 30, "1Y": 365 };
+    const range = req.query.range;
+
+    const days = VALID_RANGES[range];
 
     const query = `
       SELECT
+        date_trunc('day', created_at) AS date,
         asset,
-        asset_issuer,
-        SUM(amount) as total,
-        COUNT(*) as count
+        SUM(amount) AS volume
       FROM payments
-      WHERE merchant_id = $1 AND status = 'completed'
-      GROUP BY asset, asset_issuer
-      ORDER BY asset, asset_issuer
+      WHERE merchant_id = $1
+        AND status = 'completed'
+        AND created_at >= NOW() - INTERVAL '${days} days'
+      GROUP BY 1, 2
+      ORDER BY 1 ASC, 2 ASC
     `;
 
     const { rows } = await pool.query(query, [merchantId]);
 
-    res.json({
-      revenue: rows.map(row => ({
-        asset: row.asset,
-        asset_issuer: row.asset_issuer,
-        total: row.total,
-        count: parseInt(row.count)
-      }))
-    });
+    // Collect all distinct assets across the result set
+    const assetSet = new Set(rows.map((r) => r.asset));
+    const assets = Array.from(assetSet);
+
+    // Build a date-keyed map: { "2026-03-01": { XLM: 5.0, USDC: 100.0 } }
+    const byDate = {};
+    for (const row of rows) {
+      const dateStr = row.date.toISOString().split("T")[0];
+      if (!byDate[dateStr]) byDate[dateStr] = { date: dateStr };
+      byDate[dateStr][row.asset] = parseFloat(row.volume) || 0;
+    }
+
+    // Fill gaps so every date in the range has an entry (0 for missing assets)
+    const now = new Date();
+    const result = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split("T")[0];
+      const entry = byDate[dateStr] || { date: dateStr };
+      for (const asset of assets) {
+        if (entry[asset] === undefined) entry[asset] = 0;
+      }
+      result.push(entry);
+    }
+
+    res.json({ range, assets, data: result });
   } catch (err) {
+    if (err.message.includes("Invalid range")) {
+      return res.status(400).json({ error: err.message });
+    }
     next(err);
   }
 });

@@ -14,6 +14,7 @@ export default function PaymentsTabs() {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Dashboard tab switcher: Payments vs Development Logs */}
       <div className="flex flex-wrap items-center gap-3">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;

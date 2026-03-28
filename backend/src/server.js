@@ -1,9 +1,13 @@
 import "dotenv/config";
+import { initSentry } from "./lib/sentry.js";
 import { createApp } from "./app.js";
 import { connectRedisClient, closeRedisClient } from "./lib/redis.js";
 import { closePool, pool } from "./lib/db.js";
 import { validateEnvironmentVariables } from "./lib/env-validation.js";
+import { logger } from "./lib/logger.js";
+import { isHorizonReachable } from "./lib/stellar.js";
 
+initSentry();
 validateEnvironmentVariables();
 
 const port = process.env.PORT || 4000;
@@ -11,22 +15,48 @@ const port = process.env.PORT || 4000;
 async function startServer() {
   const redisClient = await connectRedisClient();
 
-  const app = await createApp({ redisClient });
+  const { app, io } = await createApp({ redisClient });
 
-  // Probe DB
-  try {
-    await pool.query("SELECT 1");
-    console.log("✅ pg pool connected");
-  } catch (err) {
-    console.warn("⚠️ pg pool probe failed:", err.message);
+  if (process.env.NODE_ENV !== "production") {
+    const probe = async (name, fn) => {
+      const start = Date.now();
+      try {
+        const result = await fn();
+        if (result === false) throw new Error("Unreachable");
+        return { Service: name, Status: "OK", "Latency (ms)": Date.now() - start };
+      } catch (err) {
+        return { Service: name, Status: "FAILED", "Latency (ms)": "N/A" };
+      }
+    };
+
+    const results = await Promise.allSettled([
+      probe("Database", () => pool.query("SELECT 1")),
+      probe("Redis", () => redisClient.ping()),
+      probe("Horizon", () => isHorizonReachable())
+    ]);
+
+    console.log("\n--- Startup Dependency Probes ---");
+    console.table(results.map((r) => r.value));
+    console.log("---------------------------------\n");
+  } else {
+    // Probe DB in production normally
+    try {
+      await pool.query("SELECT 1");
+      logger.info("pg pool connected");
+    } catch (err) {
+      logger.warn({ err }, "pg pool probe failed");
+    }
   }
 
   const server = app.listen(port, () => {
-    console.log(`API listening on http://localhost:${port}`);
+    logger.info({ port }, `API listening on http://localhost:${port}`);
   });
 
+  // Attach socket.io to the HTTP server
+  io.attach(server);
+
   function shutdown(signal) {
-    console.log(`${signal} received — shutting down...`);
+    logger.info({ signal }, "shutdown signal received");
     server.close(async () => {
       await closePool();
       await closeRedisClient();

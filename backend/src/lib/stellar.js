@@ -9,13 +9,119 @@ const HORIZON_URL =
     : "https://horizon-testnet.stellar.org");
 
 const server = new StellarSdk.Horizon.Server(HORIZON_URL);
+const HORIZON_HEALTH_TIMEOUT_MS = 2_000;
+
+/**
+ * Validates Stellar memo format based on memo type
+ * @param {string} memo - The memo value
+ * @param {string} memoType - The memo type (text, id, hash, return)
+ * @returns {{ valid: boolean, error?: string }}
+ */
+export function validateMemo(memo, memoType) {
+  if (!memo || !memoType) {
+    return { valid: true };
+  }
+
+  const normalizedType = memoType.toLowerCase();
+
+  switch (normalizedType) {
+    case "text":
+      // TEXT memos must be <= 28 bytes UTF-8
+      if (Buffer.byteLength(memo, "utf8") > 28) {
+        return {
+          valid: false,
+          error: "TEXT memo must be 28 bytes or less (UTF-8 encoded)",
+        };
+      }
+      return { valid: true };
+
+    case "id":
+      // ID memos must be unsigned 64-bit integers (0 to 18446744073709551615)
+      if (!/^\d+$/.test(memo)) {
+        return {
+          valid: false,
+          error: "memo must be a valid unsigned 64-bit integer when memo_type is id",
+        };
+      }
+      try {
+        const value = BigInt(memo);
+        if (value < 0n || value > 18446744073709551615n) {
+          return {
+            valid: false,
+            error: "ID memo must be between 0 and 18446744073709551615",
+          };
+        }
+      } catch {
+        return {
+          valid: false,
+          error: "ID memo must be a valid unsigned 64-bit integer",
+        };
+      }
+      return { valid: true };
+
+    case "hash":
+      // HASH memos must be exactly 32 bytes (64 hex characters)
+      if (!/^[0-9a-fA-F]{64}$/.test(memo)) {
+        return {
+          valid: false,
+          error: "memo must be a 32-byte hex string (64 characters) when memo_type is hash",
+        };
+      }
+      return { valid: true };
+
+    case "return":
+      // RETURN memos can be either 32-byte hex or a valid unsigned 64-bit ID
+      const isHex = /^[0-9a-fA-F]{64}$/.test(memo);
+      let isValidId = false;
+
+      if (/^\d+$/.test(memo)) {
+        try {
+          const val = BigInt(memo);
+          isValidId = val >= 0n && val <= 18446744073709551615n;
+        } catch {
+          isValidId = false;
+        }
+      }
+
+      if (!isHex && !isValidId) {
+        return {
+          valid: false,
+          error: "memo must be a valid unsigned 64-bit integer or a 32-byte hex string (64 characters) when memo_type is return",
+        };
+      }
+      return { valid: true };
+
+    default:
+      return {
+        valid: false,
+        error: `Invalid memo type: ${memoType}. Must be one of: text, id, hash, return`,
+      };
+  }
+}
 
 export async function isHorizonReachable() {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    HORIZON_HEALTH_TIMEOUT_MS,
+  );
+
   try {
-    await server.ledgers().order("desc").limit(1).call();
-    return true;
+    const response = await fetch(HORIZON_URL, {
+      method: "GET",
+      signal: controller.signal,
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    // Treat rate limiting as reachable so transient Horizon throttling
+    // doesn't fail the entire API health check.
+    return response.ok || response.status === 429;
   } catch {
     return false;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -51,8 +157,15 @@ function paymentMatchesAsset(payment, asset) {
     return payment.asset_type === "native";
   }
 
+  const expectedCode =
+    typeof asset.getCode === "function" ? asset.getCode() : asset.code;
+  const expectedIssuer =
+    typeof asset.getIssuer === "function" ? asset.getIssuer() : asset.issuer;
+
   return (
-    payment.asset_code === asset.code && payment.asset_issuer === asset.issuer
+    String(payment.asset_code || "").toUpperCase() ===
+      String(expectedCode || "").toUpperCase() &&
+    String(payment.asset_issuer || "") === String(expectedIssuer || "")
   );
 }
 
@@ -108,9 +221,82 @@ function handleHorizonError(err, context = "") {
 function memoMatches(tx, expectedMemo, expectedMemoType) {
   const txMemoType = (tx.memo_type || "none").toLowerCase();
   const wantType = (expectedMemoType || "text").toLowerCase();
+  const normalizedTxMemo = tx.memo == null ? "" : String(tx.memo);
+  const normalizedExpectedMemo =
+    expectedMemo == null ? "" : String(expectedMemo);
 
   if (txMemoType !== wantType) return false;
-  return String(tx.memo) === String(expectedMemo);
+  return normalizedTxMemo === normalizedExpectedMemo;
+}
+
+/**
+ * Check if an account is a multi-sig account
+ * Issue #149: Support for Multi-sig Receiving Addresses
+ */
+async function isMultiSigAccount(accountId) {
+  try {
+    const account = await server.loadAccount(accountId);
+    const thresholds = account.thresholds;
+    const signers = account.signers;
+
+    // Multi-sig if: multiple signers OR threshold > 1
+    return signers.length > 1 || thresholds.med_threshold > 1;
+  } catch (err) {
+    console.warn(`Could not load account ${accountId}:`, err.message);
+    return false;
+  }
+}
+
+/**
+ * Query Horizon for strict-receive paths.
+ * Returns the best path the sender can use to deliver `destAmount` of the
+ * destination asset, sending from `sourceAsset`.
+ *
+ * @param {object} opts
+ * @param {string} opts.sourceAccount   — Stellar public key of the sender
+ * @param {string} opts.destAssetCode   — Asset code the merchant wants to receive
+ * @param {string|null} opts.destAssetIssuer — Issuer (null for XLM)
+ * @param {string} opts.destAmount      — Amount the merchant must receive
+ * @param {string} opts.sourceAssetCode — Asset code the customer wants to send
+ * @param {string|null} opts.sourceAssetIssuer — Issuer (null for XLM)
+ * @returns {Promise<{source_amount: string, path: Array}>}
+ */
+export async function findStrictReceivePaths({
+  sourceAccount,
+  destAssetCode,
+  destAssetIssuer,
+  destAmount,
+  sourceAssetCode,
+  sourceAssetIssuer,
+}) {
+  const destAsset = resolveAsset(destAssetCode, destAssetIssuer);
+  const sourceAsset = resolveAsset(sourceAssetCode, sourceAssetIssuer);
+
+  try {
+    const result = await server
+      .strictReceivePaths([sourceAsset], destAsset, destAmount)
+      .call();
+
+    if (!result.records || result.records.length === 0) {
+      return null;
+    }
+
+    // Return the best (first) path
+    const best = result.records[0];
+    return {
+      source_amount: best.source_amount,
+      source_asset_code:
+        best.source_asset_type === "native" ? "XLM" : best.source_asset_code,
+      source_asset_issuer: best.source_asset_issuer || null,
+      destination_amount: best.destination_amount,
+      path: best.path.map((p) => ({
+        asset_code: p.asset_type === "native" ? "XLM" : p.asset_code,
+        asset_issuer: p.asset_issuer || null,
+      })),
+    };
+  } catch (err) {
+    throw handleHorizonError(err, "strict-receive-paths");
+  }
 }
 
 export async function findMatchingPayment({
@@ -135,16 +321,29 @@ export async function findMatchingPayment({
     throw handleHorizonError(err, recipient);
   }
 
+  // Check if recipient is multi-sig for enhanced verification
+  const isMultiSig = await isMultiSigAccount(recipient);
+
   for (const payment of page.records) {
-    if (payment.type !== "payment") {
+    const isDirectPayment = payment.type === "payment";
+    const isPathPayment = payment.type === "path_payment_strict_receive";
+
+    if (!isDirectPayment && !isPathPayment) {
       continue;
     }
 
+    // For path payments, verify the *received* asset and amount
+    // (the destination gets exactly what the merchant asked for)
     if (!paymentMatchesAsset(payment, asset)) {
       continue;
     }
 
     if (!amountsMatch(amount, payment.amount)) {
+      continue;
+    }
+
+    // Verify payment destination matches recipient (important for multi-sig)
+    if (payment.to !== recipient) {
       continue;
     }
 
@@ -168,10 +367,60 @@ export async function findMatchingPayment({
     return {
       id: payment.id,
       transaction_hash: payment.transaction_hash,
+      is_multisig: isMultiSig,
     };
   }
 
   return null;
+}
+
+/**
+ * Create a refund transaction XDR for a merchant to sign
+ * Issue #150: Implement a Refund API Transaction Helper
+ */
+export async function createRefundTransaction({
+  sourceAccount,
+  destination,
+  amount,
+  assetCode,
+  assetIssuer,
+  memo,
+}) {
+  try {
+    const account = await server.loadAccount(sourceAccount);
+    const asset = resolveAsset(assetCode, assetIssuer);
+
+    const txBuilder = new StellarSdk.TransactionBuilder(account, {
+      fee: StellarSdk.BASE_FEE,
+      networkPassphrase:
+        NETWORK === "public"
+          ? StellarSdk.Networks.PUBLIC
+          : StellarSdk.Networks.TESTNET,
+    });
+
+    txBuilder.addOperation(
+      StellarSdk.Operation.payment({
+        destination,
+        asset,
+        amount: amount.toString(),
+      }),
+    );
+
+    if (memo) {
+      txBuilder.addMemo(StellarSdk.Memo.text(memo));
+    }
+
+    txBuilder.setTimeout(300); // 5 minutes
+
+    const transaction = txBuilder.build();
+
+    return {
+      xdr: transaction.toXDR(),
+      hash: transaction.hash().toString("hex"),
+    };
+  } catch (err) {
+    throw handleHorizonError(err, sourceAccount);
+  }
 }
 
 export function getStellarConfig() {

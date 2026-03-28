@@ -27,3 +27,10 @@ out/
 *.sqlite3
 
 supabase/.temp/
+
+scripts/*.py
+*.py
+task.md
+issueTmeplate.md
+package-lock.json
+**/package-lock.json
