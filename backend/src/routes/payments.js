@@ -624,6 +624,7 @@ function createPaymentsRouter({
           webhook: webhookResult,
         });
       } catch (err) {
+        console.error("VERIFY_ROUTE_ERROR:", err);
         next(err);
       }
     }
