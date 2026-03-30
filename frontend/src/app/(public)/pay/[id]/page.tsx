@@ -7,6 +7,7 @@ import { useWallet } from "@/lib/wallet-context";
 import { Spinner } from "@/components/ui/Spinner";
 import { usePayment } from "@/lib/usePayment";
 import { useAssetMetadata } from "@/lib/useAssetMetadata";
+import { getAccountBalances, type AssetBalance } from "@/lib/stellar";
 import { createReceiptPdf } from "@/lib/receipt-pdf";
 import CheckoutQrModal from "@/components/CheckoutQrModal";
 import CopyButton from "@/components/CopyButton";
@@ -433,6 +434,10 @@ export default function PaymentPage() {
   const [pathQuoteLoading, setPathQuoteLoading] = useState(false);
   const [pathQuoteError, setPathQuoteError] = useState<string | null>(null);
 
+  const [walletBalances, setWalletBalances] = useState<AssetBalance[]>([]);
+  const [sourceAsset, setSourceAsset] = useState<string>("XLM");
+  const [sortedSourceAssets, setSortedSourceAssets] = useState<string[]>([]);
+
   const { activeProvider } = useWallet();
   const {
     isProcessing,
@@ -528,12 +533,58 @@ export default function PaymentPage() {
     return () => clearInterval(id);
   }, [paymentId, payment, loading]);
 
-  // ── Fetch path payment quote when wallet is connected ────────────────────
+  // ── Fetch wallet balances and sort source assets ───────
+  useEffect(() => {
+    if (!activeProvider) {
+      setWalletBalances([]);
+      setSortedSourceAssets([]);
+      return;
+    }
+
+    const loadBalances = async () => {
+      try {
+        const pubKey = await activeProvider.getPublicKey();
+        const horizonUrl = process.env.NEXT_PUBLIC_HORIZON_URL || "https://horizon-testnet.stellar.org";
+        const balances = await getAccountBalances(pubKey, horizonUrl);
+        setWalletBalances(balances);
+
+        // Intersect with supported assets (from metadata)
+        const supported = assetMetadata.map(a => a.code);
+        
+        // Sort supported assets by user balance (descending)
+        const sorted = [...supported].sort((a, b) => {
+          const balA = parseFloat(balances.find(bal => bal.code === a)?.balance || "0");
+          const balB = parseFloat(balances.find(bal => bal.code === b)?.balance || "0");
+          return balB - balA;
+        });
+
+        setSortedSourceAssets(sorted);
+        
+        // Default to the top-balanced asset
+        if (sorted.length > 0) {
+          setSourceAsset(sorted[0]);
+        }
+      } catch (err) {
+        console.error("Failed to load balances", err);
+      }
+    };
+
+    loadBalances();
+  }, [activeProvider, assetMetadata]);
+
+  // ── Fetch path payment quote when source asset or wallet changes ─────────
   useEffect(() => {
     if (!payment || !activeProvider || payment.status !== "pending") {
       setPathQuote(null);
       setPathQuoteError(null);
       setPathQuoteLoading(false);
+      setUsePathPayment(false);
+      return;
+    }
+
+    // No quote needed if customer is already paying with the right asset
+    if (sourceAsset === payment.asset.toUpperCase()) {
+      setPathQuote(null);
       setUsePathPayment(false);
       return;
     }
@@ -545,8 +596,8 @@ export default function PaymentPage() {
       try {
         const pubKey = await activeProvider.getPublicKey();
         const qs = new URLSearchParams({
-          source_asset: "XLM",
-          source_asset_issuer: "",
+          source_asset: sourceAsset,
+          source_asset_issuer: assetMetadata.find(a => a.code === sourceAsset)?.issuer || "",
           source_account: pubKey,
         });
         const res = await fetch(
@@ -556,6 +607,9 @@ export default function PaymentPage() {
           if (!cancelled) {
             setPathQuote(null);
             setUsePathPayment(false);
+            if (res.status === 404) {
+              setPathQuoteError(`No path found for ${sourceAsset}.`);
+            }
           }
           return;
         }
@@ -577,7 +631,7 @@ export default function PaymentPage() {
     return () => {
       cancelled = true;
     };
-  }, [payment, activeProvider, paymentId]);
+  }, [payment, activeProvider, paymentId, sourceAsset, assetMetadata]);
 
   useEffect(() => {
     if (!isPayModalOpen) return;
@@ -980,24 +1034,52 @@ export default function PaymentPage() {
                       </div>
                     )}
 
-                    {/* Path payment toggle */}
-                    {pathQuote && !pathQuoteLoading && (
-                      <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/30 px-4 py-3 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={usePathPayment}
-                          onChange={(e) => setUsePathPayment(e.target.checked)}
-                          className="h-4 w-4"
-                          style={{ accentColor: "var(--checkout-primary)" }}
-                        />
-                        <span className="text-sm text-slate-300">
-                          {t("pathPaymentTogglePrefix")}{" "}
-                          <span className="font-semibold text-white">
-                            {pathQuote.source_amount} {pathQuote.source_asset}
-                          </span>{" "}
-                          {t("pathPaymentToggleSuffix")}
-                        </span>
-                      </label>
+                    {/* Path payment toggle & Asset Selector */}
+                    {sortedSourceAssets.length > 0 && (
+                      <div className="flex flex-col gap-3">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                            Payment Asset
+                          </label>
+                          <div className="relative group">
+                            <select
+                              value={sourceAsset}
+                              onChange={(e) => setSourceAsset(e.target.value)}
+                              className="w-full appearance-none rounded-xl border border-white/10 bg-black/40 p-3 text-sm text-white focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50 transition-colors group-hover:border-white/20"
+                            >
+                              {sortedSourceAssets.map((assetCode) => (
+                                <option key={assetCode} value={assetCode} className="bg-slate-900">
+                                  {assetCode} (Balance: {parseFloat(walletBalances.find(b => b.code === assetCode)?.balance || "0").toFixed(2)})
+                                </option>
+                              ))}
+                            </select>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </div>
+                          </div>
+                        </div>
+
+                        {pathQuote && !pathQuoteLoading && sourceAsset !== payment.asset.toUpperCase() && (
+                          <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/30 px-4 py-3 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={usePathPayment}
+                              onChange={(e) => setUsePathPayment(e.target.checked)}
+                              className="h-4 w-4"
+                              style={{ accentColor: "var(--checkout-primary)" }}
+                            />
+                            <span className="text-sm text-slate-300">
+                              {t("pathPaymentTogglePrefix")}{" "}
+                              <span className="font-semibold text-white">
+                                {pathQuote.source_amount} {pathQuote.source_asset}
+                              </span>{" "}
+                              {t("pathPaymentToggleSuffix")}
+                            </span>
+                          </label>
+                        )}
+                      </div>
                     )}
                     {pathQuoteLoading && (
                       <p className="text-center text-xs text-slate-500">
