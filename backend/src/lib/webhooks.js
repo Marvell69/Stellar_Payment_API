@@ -150,13 +150,15 @@ export function verifyWebhookWithTimestamp(rawBody, signatureHeader, timestamp, 
 /**
  * Log webhook delivery attempt to database
  */
-async function logWebhookDelivery(paymentId, statusCode, responseBody) {
+async function logWebhookDelivery(paymentId, statusCode, responseBody, requestPayload = null, requestHeaders = null) {
   if (!paymentId) return;
 
   try {
     await supabase.from("webhook_delivery_logs").insert({
       payment_id: paymentId,
       status_code: statusCode,
+      request_payload: requestPayload,
+      request_headers: requestHeaders,
       response_body: responseBody ? responseBody.substring(0, 1000) : null // Limit response body size
     });
   } catch (err) {
@@ -173,8 +175,8 @@ async function attempt(url, payload, headers, paymentId) {
 
   const text = await response.text().catch(() => "");
 
-  // Log the delivery attempt
-  await logWebhookDelivery(paymentId, response.status, text);
+  // Log the delivery attempt with request details
+  await logWebhookDelivery(paymentId, response.status, text, payload, headers);
 
   return { ok: response.ok, status: response.status, body: text };
 }
@@ -297,9 +299,9 @@ export async function sendWebhook(url, payload, secret, paymentId = null, custom
   } catch (err) {
     console.error(`Webhook to ${url} encountered an error: ${err.message}. Scheduling retries.`);
 
-    // Log the error
+    // Log the error with request details
     if (paymentId) {
-      await logWebhookDelivery(paymentId, 0, err.message);
+      await logWebhookDelivery(paymentId, 0, err.message, payload, headers);
     }
 
     scheduleRetries(url, payload, headers, paymentId);

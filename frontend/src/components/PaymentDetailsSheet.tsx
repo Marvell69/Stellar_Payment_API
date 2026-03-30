@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useMerchantApiKey } from "@/lib/merchant-store";
 import { localeToLanguageTag } from "@/i18n/config";
 import { InfoTooltip } from "@/components/InfoTooltip";
+import WebhookDetailModal, { WebhookLog } from "./WebhookDetailModal";
 
 interface PaymentDetails {
   id: string;
@@ -22,15 +23,7 @@ interface PaymentDetails {
   created_at: string;
 }
 
-interface WebhookLog {
-  id: string;
-  event_type: string;
-  payload: unknown;
-  status: number;
-  response_body: string | null;
-  url: string;
-  created_at: string;
-}
+
 
 interface PaymentDetailsSheetProps {
   paymentId: string;
@@ -49,6 +42,7 @@ export default function PaymentDetailsSheet({
   const apiKey = useMerchantApiKey();
   const [payment, setPayment] = useState<PaymentDetails | null>(null);
   const [webhookLogs, setWebhookLogs] = useState<WebhookLog[]>([]);
+  const [viewingLog, setViewingLog] = useState<WebhookLog | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"details" | "metadata" | "webhooks">("details");
@@ -247,14 +241,18 @@ export default function PaymentDetailsSheet({
                         ) : (
                           <div className="divide-y divide-white/5">
                             {webhookLogs.map((log: WebhookLog) => (
-                              <div key={log.id} className="py-3">
+                              <div 
+                                key={log.id} 
+                                className="py-3 cursor-pointer hover:bg-white/5 transition-colors rounded-lg px-2 -mx-2"
+                                onClick={() => setViewingLog(log)}
+                              >
                                 <div className="flex items-center justify-between">
-                                  <span className="text-xs font-mono text-white">{log.event_type}</span>
-                                  <span className={`text-[10px] font-bold ${log.status >= 200 && log.status < 300 ? 'text-green-400' : 'text-red-400'}`}>
-                                    HTTP {log.status}
+                                  <span className="text-xs font-mono text-white">{log.event || log.id}</span>
+                                  <span className={`text-[10px] font-bold ${log.status_code >= 200 && log.status_code < 300 ? 'text-green-400' : 'text-red-400'}`}>
+                                    HTTP {log.status_code}
                                   </span>
                                 </div>
-                                <p className="mt-1 text-[10px] text-slate-500">{new Date(log.created_at).toLocaleString(locale)}</p>
+                                <p className="mt-1 text-[10px] text-slate-500">{new Date(log.timestamp).toLocaleString(locale)}</p>
                               </div>
                             ))}
                           </div>
@@ -266,6 +264,11 @@ export default function PaymentDetailsSheet({
               </div>
             </div>
           </motion.div>
+          <WebhookDetailModal
+            isOpen={!!viewingLog}
+            onClose={() => setViewingLog(null)}
+            log={viewingLog}
+          />
         </>
       )}
     </AnimatePresence>
