@@ -4,6 +4,7 @@ import { useState } from "react";
 import { registerMerchant, type Merchant } from "../lib/auth";
 import MaskedValue from "./MaskedValue";
 import toast from "react-hot-toast";
+import zxcvbn from "zxcvbn";
 import {
   useSetMerchantApiKey,
   useSetMerchantMetadata,
@@ -14,6 +15,7 @@ export default function RegistrationForm() {
   const setApiKey = useSetMerchantApiKey();
   const setMerchant = useSetMerchantMetadata();
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [notificationEmail, setNotificationEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -136,6 +138,54 @@ export default function RegistrationForm() {
             className="rounded-xl border border-white/10 bg-white/5 p-3 text-white placeholder:text-slate-600 focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
             placeholder="owner@business.com"
           />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor="password"
+            className="text-xs font-medium text-slate-400 uppercase tracking-wider"
+          >
+            Password
+          </label>
+          <input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="rounded-xl border border-white/10 bg-white/5 p-3 text-white placeholder:text-slate-600 focus:border-mint/50 focus:outline-none focus:ring-1 focus:ring-mint/50"
+            placeholder="••••••••"
+          />
+          {/* Strength Meter */}
+          <div className="mt-1 flex flex-col gap-1.5">
+            <div className="flex gap-1 h-1.5">
+              {[0, 1, 2, 3].map((index) => {
+                const score = password ? zxcvbn(password).score : 0;
+                const activeBars = score === 0 ? 1 : score === 4 ? 4 : score + 1;
+                const isActive = password.length > 0 && index < activeBars;
+                let bgColor = "bg-white/10";
+                
+                if (isActive) {
+                  if (score === 0) bgColor = "bg-red-500";
+                  else if (score === 1) bgColor = "bg-orange-500";
+                  else if (score === 2) bgColor = "bg-yellow-400";
+                  else if (score === 3) bgColor = "bg-lime-400";
+                  else if (score === 4) bgColor = "bg-green-500";
+                }
+                
+                return (
+                  <div
+                    key={index}
+                    className={`flex-1 rounded-full transition-colors duration-300 ${bgColor}`}
+                  />
+                );
+              })}
+            </div>
+            {password.length > 0 && (
+              <p className="text-[10px] text-slate-400 text-right font-medium">
+                {["Weak", "Fair", "Good", "Strong", "Strong"][zxcvbn(password).score]}
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-col gap-1.5">

@@ -44,7 +44,8 @@
     "remark-gfm": "^4.0.0",
     "socket.io-client": "^4.8.1",
     "stellar-sdk": "^12.2.0",
-    "zustand": "^5.0.12"
+    "zustand": "^5.0.12",
+    "zxcvbn": "^4.4.2"
   },
   "devDependencies": {
     "@axe-core/cli": "^4.11.1",
@@ -55,6 +56,7 @@
     "@types/prismjs": "^1.26.5",
     "@types/react": "18.3.28",
     "@types/react-dom": "^18.3.7",
+    "@types/zxcvbn": "^4.4.5",
     "autoprefixer": "^10.4.19",
     "eslint": "^8.57.0",
     "eslint-config-next": "^14.2.5",
