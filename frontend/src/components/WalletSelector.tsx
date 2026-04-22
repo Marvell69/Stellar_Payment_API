@@ -31,6 +31,16 @@ function WalletConnectIcon() {
   );
 }
 
+const ICONS: Record<string, React.ReactNode> = {
+  freighter: <FreighterIcon />,
+  walletconnect: <WalletConnectIcon />,
+};
+
+const SUBTITLES: Record<string, string> = {
+  freighter: "Browser extension wallet",
+  walletconnect: "Mobile & desktop wallets",
+};
+
 export default function WalletSelector({ networkPassphrase, onConnected }: WalletSelectorProps) {
   const t = useTranslations("walletSelector");
   const { providers, activeProvider, selectProvider } = useWallet();
@@ -99,16 +109,6 @@ export default function WalletSelector({ networkPassphrase, onConnected }: Walle
     }
   }
 
-  const ICONS: Record<string, React.ReactNode> = {
-    freighter: <FreighterIcon />,
-    walletconnect: <WalletConnectIcon />,
-  };
-
-  const SUBTITLES: Record<string, string> = {
-    freighter: "Browser extension wallet",
-    walletconnect: "Mobile & desktop wallets",
-  };
-
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -130,10 +130,10 @@ export default function WalletSelector({ networkPassphrase, onConnected }: Walle
               type="button"
               disabled={isDisabled || connecting !== null}
               onClick={() => handleSelect(p.id)}
-              className="group relative flex h-16 w-full items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.03] px-5 text-left transition-all hover:border-mint/30 hover:bg-mint/5 hover:shadow-[0_0_20px_rgba(94,242,192,0.08)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+              className="group relative flex h-16 w-full items-center gap-4 rounded-2xl border border-[#E8E8E8] bg-white px-5 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-[var(--pluto-400)] hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {/* Icon Container */}
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 transition-all group-hover:border-mint/20 group-hover:bg-mint/10">
+              {/* Icon */}
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E8E8E8] bg-[#F9F9F9] transition-colors duration-200 group-hover:border-[var(--pluto-200)] group-hover:bg-[var(--pluto-50)]">
                 {ICONS[p.id] ?? (
                   <svg className="h-5 w-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
@@ -162,7 +162,7 @@ export default function WalletSelector({ networkPassphrase, onConnected }: Walle
 
               {/* Arrow */}
               {!isConnecting && !isDisabled && (
-                <svg className="h-4 w-4 shrink-0 text-slate-600 group-hover:text-mint transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-4 w-4 shrink-0 text-[#C0C0C0] transition-colors duration-200 group-hover:text-[var(--pluto-500)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               )}
@@ -194,7 +194,7 @@ export default function WalletSelector({ networkPassphrase, onConnected }: Walle
           href="https://freighter.app"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-center text-[10px] font-bold uppercase tracking-widest text-mint hover:text-glow transition-colors"
+          className="text-center text-[10px] font-bold uppercase tracking-widest text-[var(--pluto-500)] transition-colors duration-150 hover:text-[var(--pluto-700)]"
         >
           Don&apos;t have Freighter? Install it →
         </a>
