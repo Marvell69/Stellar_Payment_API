@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { motion } from "framer-motion";
+import { memo, useCallback, useMemo } from "react";
 
 function getNavItems(t: ReturnType<typeof useTranslations>) {
   return [
@@ -70,7 +71,7 @@ interface SidebarProps {
   onMobileOpenChange: (open: boolean) => void;
 }
 
-function NavLinks({
+const NavLinks = memo(function NavLinks({
   pathname,
   t,
   onNavigate,
@@ -79,7 +80,7 @@ function NavLinks({
   t: ReturnType<typeof useTranslations>;
   onNavigate?: () => void;
 }) {
-  const navItems = getNavItems(t);
+  const navItems = useMemo(() => getNavItems(t), [t]);
 
   return (
     <nav aria-label="Dashboard navigation" className="flex flex-1 flex-col gap-1 px-4 py-6">
@@ -91,7 +92,7 @@ function NavLinks({
         if (isExternal) {
           return (
             <a key={item.href} href={item.href} target="_blank" rel="noopener noreferrer" onClick={onNavigate}
-              className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all text-[#6B6B6B] hover:bg-[var(--pluto-50)] hover:text-[var(--pluto-700)]">
+              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[#6B6B6B] transition-colors duration-150 hover:bg-[var(--pluto-50)] hover:text-[var(--pluto-800)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)]">
               <span className="shrink-0">{item.icon}</span>
               <span className="text-xs font-semibold tracking-wide">{item.label}</span>
               <svg className="h-3 w-3 ml-auto opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
@@ -105,12 +106,12 @@ function NavLinks({
             href={item.href}
             prefetch={true}
             onClick={onNavigate}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all ${
+            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] ${
               isActive
                 ? "bg-[var(--pluto-500)] text-white"
                 : isHighlight
-                ? "border border-[var(--pluto-200)] bg-[var(--pluto-50)] text-[var(--pluto-700)] hover:bg-[var(--pluto-500)] hover:text-white hover:border-[var(--pluto-500)]"
-                : "text-[#6B6B6B] hover:bg-[var(--pluto-50)] hover:text-[var(--pluto-700)]"
+                ? "border border-[var(--pluto-200)] bg-[var(--pluto-50)] text-[var(--pluto-700)] hover:border-[var(--pluto-500)] hover:bg-[var(--pluto-500)] hover:text-white"
+                : "text-[#6B6B6B] hover:bg-[var(--pluto-100)] hover:text-[var(--pluto-800)]"
             }`}
           >
             <span className="shrink-0">{item.icon}</span>
@@ -121,7 +122,7 @@ function NavLinks({
 
       <div className="mt-auto pt-4 border-t border-[#E8E8E8]">
         <Link href="/" onClick={onNavigate}
-          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[#6B6B6B] transition-all hover:bg-[#F5F5F5] hover:text-[#0A0A0A]"
+          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[#6B6B6B] transition-colors duration-150 hover:bg-[var(--pluto-50)] hover:text-[var(--pluto-800)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)]"
         >
           <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -131,7 +132,9 @@ function NavLinks({
       </div>
     </nav>
   );
-}
+});
+
+NavLinks.displayName = "NavLinks";
 
 export default function Sidebar({
   mobileOpen,
@@ -139,6 +142,7 @@ export default function Sidebar({
 }: SidebarProps) {
   const t = useTranslations("sidebar");
   const pathname = usePathname();
+  const handleNavigate = useCallback(() => onMobileOpenChange(false), [onMobileOpenChange]);
 
   // Note: Collapsible logic removed to fix linting as it's not currently used in the UI.
 
@@ -153,7 +157,7 @@ export default function Sidebar({
       <NavLinks
         pathname={pathname}
         t={t}
-        onNavigate={() => onMobileOpenChange(false)}
+        onNavigate={handleNavigate}
       />
     </>
   );
