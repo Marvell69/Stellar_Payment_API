@@ -218,11 +218,21 @@
   },
   "walletSelector": {
     "chooseWallet": "Elige una billetera",
+    "description": "Conecta tu billetera Stellar para completar este pago.",
+    "connecting": "Conectando...",
     "walletConnectWaiting": "Esperando la billetera...",
     "noProjectId": "(sin project ID)",
     "notInstalled": "(no instalada)",
+    "tapToConnect": "Haz clic para conectar",
     "scanTitle": "Escanea con tu app de billetera Stellar",
-    "pairingFailed": "La vinculacion de WalletConnect fallo"
+    "scanDescription": "Escanea con Freighter móvil o cualquier billetera compatible con WalletConnect",
+    "pairingFailed": "La vinculacion de WalletConnect fallo",
+    "userRejected": "La solicitud de conexión fue cancelada. Apruébala en tu billetera para continuar.",
+    "walletConnectUnavailable": "WalletConnect no está disponible en este momento. Prueba con Freighter o habilita un WalletConnect project ID válido.",
+    "extensionNotFound": "No pudimos encontrar esa billetera en este dispositivo. Instala la extensión e inténtalo de nuevo.",
+    "noAccountFound": "La billetera se conectó, pero no devolvió ninguna cuenta Stellar. Abre una cuenta Stellar en la billetera y vuelve a intentarlo.",
+    "walletConnectFailed": "No pudimos completar la conexión con WalletConnect. Inténtalo de nuevo.",
+    "connectionFailed": "No pudimos conectar esa billetera en este momento. Inténtalo de nuevo."
   },
   "checkout": {
     "paymentRequest": "Solicitud de pago",

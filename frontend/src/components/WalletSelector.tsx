@@ -67,8 +67,55 @@ export default function WalletSelector({ networkPassphrase, onConnected }: Walle
 
   if (activeProvider) return null;
 
+  function getFriendlyErrorMessage(id: string, err: unknown) {
+    const message = err instanceof Error ? err.message : String(err ?? "");
+    const normalized = message.toLowerCase();
+
+    if (
+      normalized.includes("4001") ||
+      normalized.includes("reject") ||
+      normalized.includes("declin") ||
+      normalized.includes("denied") ||
+      normalized.includes("canceled") ||
+      normalized.includes("cancelled")
+    ) {
+      return t("userRejected");
+    }
+
+    if (
+      normalized.includes("project_id") ||
+      normalized.includes("project id") ||
+      normalized.includes("walletconnect is disabled") ||
+      normalized.includes("pairing uri")
+    ) {
+      return t("walletConnectUnavailable");
+    }
+
+    if (
+      normalized.includes("not installed") ||
+      normalized.includes("not found") ||
+      normalized.includes("extension")
+    ) {
+      return t("extensionNotFound");
+    }
+
+    if (
+      normalized.includes("no stellar accounts") ||
+      normalized.includes("public key") ||
+      normalized.includes("session not established")
+    ) {
+      return t("noAccountFound");
+    }
+
+    return id === "walletconnect"
+      ? t("walletConnectFailed")
+      : t("connectionFailed");
+  }
+
   async function handleSelect(id: string) {
     setConnectError(null);
+    setWcError(null);
+    setWcUri(null);
     setConnecting(id);
 
     try {
@@ -97,7 +144,7 @@ export default function WalletSelector({ networkPassphrase, onConnected }: Walle
       selectProvider(id);
       onConnected();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Connection failed";
+      const msg = getFriendlyErrorMessage(id, err);
       if (id === "walletconnect") {
         setWcError(msg);
         setWcUri(null);
@@ -113,7 +160,7 @@ export default function WalletSelector({ networkPassphrase, onConnected }: Walle
     <div className="flex flex-col gap-4">
       <div>
         <p className="text-sm font-bold text-white">{t("chooseWallet")}</p>
-        <p className="text-xs text-slate-400 mt-0.5">Connect your Stellar wallet to complete this payment.</p>
+        <p className="mt-0.5 text-xs text-slate-400">{t("description")}</p>
       </div>
 
       <div className="flex flex-col gap-3">
@@ -121,8 +168,7 @@ export default function WalletSelector({ networkPassphrase, onConnected }: Walle
           const isWc = p.id === "walletconnect";
           const isConnecting = connecting === p.id;
           const isInstalled = installed[p.id] ?? false;
-          // WalletConnect needs a project ID; Freighter just needs to be installed
-          const isDisabled = isWc ? !isInstalled : false;
+          const isDisabled = !isInstalled;
 
           return (
             <button
@@ -130,6 +176,8 @@ export default function WalletSelector({ networkPassphrase, onConnected }: Walle
               type="button"
               disabled={isDisabled || connecting !== null}
               onClick={() => handleSelect(p.id)}
+              aria-busy={isConnecting}
+              className="group relative flex h-16 w-full items-center gap-4 rounded-2xl border border-[#E8E8E8] bg-white px-5 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-[var(--pluto-400)] hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] disabled:cursor-not-allowed disabled:opacity-40"
               className="group relative flex h-16 w-full items-center gap-4 rounded-2xl border border-[#E8E8E8] bg-white px-5 text-left shadow-sm transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-[var(--pluto-400)] hover:shadow-[0_6px_22px_rgba(74,111,165,0.12)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-300)] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {/* Icon */}
@@ -154,7 +202,7 @@ export default function WalletSelector({ networkPassphrase, onConnected }: Walle
                     <span className="text-[10px] font-medium text-slate-500">
                       {isDisabled
                         ? (isWc ? t("noProjectId") : t("notInstalled"))
-                        : SUBTITLES[p.id] ?? "Click to connect"}
+                        : SUBTITLES[p.id] ?? t("tapToConnect")}
                     </span>
                   </>
                 )}
@@ -173,17 +221,17 @@ export default function WalletSelector({ networkPassphrase, onConnected }: Walle
 
       {/* WalletConnect QR */}
       {wcUri && (
-        <div className="flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-6">
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-6" aria-live="polite">
           <p className="text-xs font-bold uppercase tracking-widest text-slate-500">{t("scanTitle")}</p>
           <div className="rounded-xl bg-white p-3 shadow-[0_0_20px_rgba(255,255,255,0.05)]">
             <QRCodeSVG value={wcUri} size={200} level="M" fgColor="#0A0A0A" bgColor="#ffffff" />
           </div>
-          <p className="text-[10px] text-slate-500 text-center">Scan with Freighter mobile or any WalletConnect-compatible wallet</p>
+          <p className="text-center text-[10px] text-slate-500">{t("scanDescription")}</p>
         </div>
       )}
 
       {(wcError || connectError) && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-center text-sm text-red-400">
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-center text-sm text-red-400" role="alert" aria-live="polite">
           {wcError || connectError}
         </div>
       )}
