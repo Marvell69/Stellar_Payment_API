@@ -280,8 +280,8 @@ function createPaymentsRouter({
         asset_issuer: body.asset_issuer || null,
         recipient: body.recipient,
         description: body.description || null,
-        memo: body.memo || null,
-        memo_type: body.memo_type || null,
+        memo: body.message || body.memo || null,
+        memo_type: body.message ? "text" : (body.memo_type || null),
         webhook_url: body.webhook_url || null,
         client_id: body.client_id || null,
         status: "pending",
@@ -324,6 +324,7 @@ function createPaymentsRouter({
 
   router.post("/create-payment", createPaymentRateLimit, recaptchaMiddleware(), validateRequest({ body: paymentSessionZodSchema }), sanitizeMetadataMiddleware, createSession);
   router.post("/sessions", createPaymentRateLimit, validateRequest({ body: paymentSessionZodSchema }), sanitizeMetadataMiddleware, createSession);
+  router.post("/support-transactions", createPaymentRateLimit, validateRequest({ body: paymentZodSchema }), sanitizeMetadataMiddleware, createSession);
 
   /**
    * @swagger
