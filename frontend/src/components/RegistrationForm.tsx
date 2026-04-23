@@ -17,35 +17,50 @@ const BUSINESS_NAME_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9\s&'.,-]{1,79}$/;
 
 // Memoized password strength indicator to prevent unnecessary re-renders
 const PasswordStrengthIndicator = React.memo(
-  ({ score, passwordLength }: { score: number; passwordLength: number }) => (
-    <div className="mt-1 flex flex-col gap-2">
-      <div className="flex h-1 gap-1">
-        {[0, 1, 2, 3].map((index) => {
-          const activeBars = score === 0 ? 1 : score === 4 ? 4 : score + 1;
-          const isActive = passwordLength > 0 && index < activeBars;
-          let bgColor = "bg-[#E8E8E8]";
+  ({ score, passwordLength }: { score: number; passwordLength: number }) => {
+    const labels = ["Weak", "Fair", "Good", "Strong", "Strong"];
+    const currentLabel = labels[score];
 
-          if (isActive) {
-            if (score <= 1) bgColor = "bg-red-400";
-            else if (score === 2) bgColor = "bg-yellow-400";
-            else bgColor = "bg-[#0A0A0A]";
-          }
+    return (
+      <div className="mt-1 flex flex-col gap-2">
+        <div
+          className="flex h-1 gap-1"
+          role="progressbar"
+          aria-valuenow={passwordLength > 0 ? score + 1 : 0}
+          aria-valuemin={0}
+          aria-valuemax={4}
+          aria-label={`Password strength: ${passwordLength > 0 ? currentLabel : "None"}`}
+        >
+          {[0, 1, 2, 3].map((index) => {
+            const activeBars = score === 0 ? 1 : score === 4 ? 4 : score + 1;
+            const isActive = passwordLength > 0 && index < activeBars;
+            let bgColor = "bg-[#E8E8E8]";
 
-          return (
-            <div
-              key={index}
-              className={`flex-1 rounded-full transition-colors duration-300 ${bgColor}`}
-            />
-          );
-        })}
+            if (isActive) {
+              if (score <= 1) bgColor = "bg-red-400";
+              else if (score === 2) bgColor = "bg-yellow-400";
+              else bgColor = "bg-[#0A0A0A]";
+            }
+
+            return (
+              <div
+                key={index}
+                className={`flex-1 rounded-full transition-colors duration-300 ${bgColor}`}
+              />
+            );
+          })}
+        </div>
+        {passwordLength > 0 && (
+          <p
+            className="text-[10px] text-[#6B6B6B] text-right font-black uppercase tracking-widest"
+            aria-live="polite"
+          >
+            {currentLabel}
+          </p>
+        )}
       </div>
-      {passwordLength > 0 && (
-        <p className="text-[9px] text-[#6B6B6B] text-right font-black uppercase tracking-widest">
-          {["Weak", "Fair", "Good", "Strong", "Strong"][score]}
-        </p>
-      )}
-    </div>
-  ),
+    );
+  },
 );
 
 PasswordStrengthIndicator.displayName = "PasswordStrengthIndicator";
@@ -180,7 +195,7 @@ const RegistrationForm = React.memo(function RegistrationForm() {
       <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="rounded-[3rem] border border-[#E8E8E8] bg-white p-12 shadow-[0_20px_60px_rgb(0,0,0,0.05)]">
           <div className="flex flex-col gap-4 text-center sm:text-left mb-8">
-            <p className="font-bold text-[10px] uppercase tracking-[0.4em] text-[#6B6B6B]">
+            <p className="font-bold text-xs uppercase tracking-[0.4em] text-[#6B6B6B]">
               Success
             </p>
             <h2 className="text-4xl font-bold text-[#0A0A0A] font-serif tracking-tight uppercase">
@@ -210,7 +225,7 @@ const RegistrationForm = React.memo(function RegistrationForm() {
 
         <a
           href="/dashboard"
-          className="text-center text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B] transition-colors underline underline-offset-8 hover:text-[#0A0A0A]"
+          className="text-center text-xs font-bold uppercase tracking-widest text-[#6B6B6B] transition-colors underline underline-offset-8 hover:text-[#0A0A0A]"
         >
           Enter Dashboard
         </a>
@@ -219,9 +234,17 @@ const RegistrationForm = React.memo(function RegistrationForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-8" noValidate>
+    <form
+      onSubmit={handleSubmit}
+      className="flex flex-col gap-8"
+      noValidate
+      aria-busy={loading}
+    >
       {error && (
-        <div className="rounded-2xl border border-red-100 bg-red-50 p-5 text-xs font-bold text-red-600">
+        <div
+          className="rounded-2xl border border-red-100 bg-red-50 p-5 text-xs font-bold text-red-600"
+          role="alert"
+        >
           {error}
         </div>
       )}
@@ -230,7 +253,7 @@ const RegistrationForm = React.memo(function RegistrationForm() {
         <div className="flex flex-col gap-2">
           <label
             htmlFor="businessName"
-            className="text-[10px] font-bold text-[#6B6B6B] uppercase tracking-widest"
+            className="text-xs font-bold text-[#6B6B6B] uppercase tracking-widest"
           >
             Business Name
           </label>
@@ -258,7 +281,7 @@ const RegistrationForm = React.memo(function RegistrationForm() {
           {businessNameError && (
             <p
               id="business-name-error"
-              className="text-[10px] font-bold text-red-500 uppercase tracking-widest"
+              className="text-xs font-bold text-red-500 uppercase tracking-widest"
               role="alert"
             >
               {businessNameError}
@@ -269,7 +292,7 @@ const RegistrationForm = React.memo(function RegistrationForm() {
         <div className="flex flex-col gap-2">
           <label
             htmlFor="email"
-            className="text-[10px] font-bold text-[#6B6B6B] uppercase tracking-widest"
+            className="text-xs font-bold text-[#6B6B6B] uppercase tracking-widest"
           >
             Primary Email
           </label>
@@ -295,7 +318,7 @@ const RegistrationForm = React.memo(function RegistrationForm() {
           {emailError && (
             <p
               id="primary-email-error"
-              className="text-[10px] font-bold text-red-500 uppercase tracking-widest"
+              className="text-xs font-bold text-red-500 uppercase tracking-widest"
               role="alert"
             >
               {emailError}
@@ -306,7 +329,7 @@ const RegistrationForm = React.memo(function RegistrationForm() {
         <div className="flex flex-col gap-2">
           <label
             htmlFor="password"
-            className="text-[10px] font-bold text-[#6B6B6B] uppercase tracking-widest"
+            className="text-xs font-bold text-[#6B6B6B] uppercase tracking-widest"
           >
             Password
           </label>
@@ -335,7 +358,7 @@ const RegistrationForm = React.memo(function RegistrationForm() {
           {passwordError && (
             <p
               id="password-error"
-              className="text-[10px] font-bold text-red-500 uppercase tracking-widest"
+              className="text-xs font-bold text-red-500 uppercase tracking-widest"
               role="alert"
             >
               {passwordError}
@@ -346,7 +369,7 @@ const RegistrationForm = React.memo(function RegistrationForm() {
         <div className="flex flex-col gap-2">
           <label
             htmlFor="notificationEmail"
-            className="text-[10px] font-bold text-[#6B6B6B] uppercase tracking-widest"
+            className="text-xs font-bold text-[#6B6B6B] uppercase tracking-widest"
           >
             Notification Email
           </label>
@@ -374,7 +397,7 @@ const RegistrationForm = React.memo(function RegistrationForm() {
           {notificationEmailError && (
             <p
               id="notification-email-error"
-              className="text-[10px] font-bold text-red-500 uppercase tracking-widest"
+              className="text-xs font-bold text-red-500 uppercase tracking-widest"
               role="alert"
             >
               {notificationEmailError}
@@ -386,7 +409,7 @@ const RegistrationForm = React.memo(function RegistrationForm() {
       <button
         type="submit"
         disabled={loading || !isFormValid}
-        className="group relative flex h-16 items-center justify-center rounded-2xl bg-[#0A0A0A] px-8 text-[10px] font-bold uppercase tracking-[0.3em] text-white transition-all hover:bg-black shadow-xl shadow-black/10 disabled:cursor-not-allowed disabled:opacity-50"
+        className="group relative flex h-16 items-center justify-center rounded-2xl bg-[#0A0A0A] px-8 text-xs font-bold uppercase tracking-[0.3em] text-white transition-all hover:bg-black shadow-xl shadow-black/10 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {loading ? (
           <span className="flex items-center gap-3">

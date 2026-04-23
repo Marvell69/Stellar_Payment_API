@@ -383,26 +383,27 @@ export default function PaymentMetrics({
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: "#FFFFFF",
-                    border: "1px solid #E8E8E8",
-                    borderRadius: "4px",
-                    padding: "12px",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+                    backgroundColor: "rgba(255, 255, 255, 0.95)",
+                    border: "1px solid var(--pluto-100)",
+                    borderRadius: "16px",
+                    padding: "16px",
+                    boxShadow: "0 20px 50px rgba(0, 0, 0, 0.12)",
+                    backdropFilter: "blur(8px)",
                   }}
                   labelStyle={{
-                    color: "#0A0A0A",
+                    color: "var(--pluto-600)",
                     fontSize: "10px",
                     fontWeight: "700",
                     textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                    marginBottom: "4px",
+                    letterSpacing: "0.08em",
+                    marginBottom: "8px",
                   }}
                   formatter={(value: number, name: string) => [
                     <span key={name} className="flex items-center gap-2">
-                      <span className="text-[11px] font-bold text-[#0A0A0A]">
+                      <span className="text-[12px] font-bold text-[var(--text-primary)]">
                         {value.toLocaleString()}
                       </span>
-                      <span className="text-[9px] font-medium text-[#6B6B6B] uppercase">
+                      <span className="text-[10px] font-medium text-[var(--text-secondary)] uppercase tracking-widest">
                         {name}
                       </span>
                     </span>,
