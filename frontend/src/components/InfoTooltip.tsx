@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface InfoTooltipProps {
@@ -9,24 +9,35 @@ interface InfoTooltipProps {
   className?: string;
 }
 
-export function InfoTooltip({ content, children, className = "" }: InfoTooltipProps) {
+export function InfoTooltip({
+  content,
+  children,
+  className = "",
+}: InfoTooltipProps) {
   const [isVisible, setIsVisible] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <div
-      className={`relative inline-flex items-center ${className}`}
-      onMouseEnter={() => setIsVisible(true)}
-      onMouseLeave={() => setIsVisible(false)}
-      onFocus={() => setIsVisible(true)}
-      onBlur={() => setIsVisible(false)}
-    >
-      <span className="cursor-help border-b border-dotted border-white/30 decoration-white/30 transition-colors hover:border-mint hover:text-mint focus-visible:text-mint">
+    <div className={`relative inline-flex items-center ${className}`}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="cursor-help border-b border-dotted border-white/30 decoration-white/30 transition-colors hover:border-mint hover:text-mint focus-visible:border-mint focus-visible:text-mint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mint focus-visible:ring-offset-2 focus-visible:ring-offset-[#16171a]"
+        onMouseEnter={() => setIsVisible(true)}
+        onMouseLeave={() => setIsVisible(false)}
+        onFocus={() => setIsVisible(true)}
+        onBlur={() => setIsVisible(false)}
+        aria-label="More information"
+        aria-describedby={isVisible ? "tooltip-content" : undefined}
+      >
         {children}
-      </span>
+      </button>
 
       <AnimatePresence>
         {isVisible && (
           <motion.div
+            id="tooltip-content"
+            role="tooltip"
             initial={{ opacity: 0, scale: 0.95, y: 5 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 5 }}

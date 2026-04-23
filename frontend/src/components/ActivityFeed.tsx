@@ -10,10 +10,7 @@ import {
   useMerchantId,
 } from "@/lib/merchant-store";
 import { usePaymentSocket } from "@/lib/usePaymentSocket";
-import {
-  useDisplayPreferences,
-  formatAmount,
-} from "@/lib/display-preferences";
+import { useDisplayPreferences, formatAmount } from "@/lib/display-preferences";
 
 interface Payment {
   id: string;
@@ -37,37 +34,49 @@ export default function ActivityFeed() {
 
   useHydrateMerchantStore();
 
-  const handleConfirmed = useCallback((event: { id: string; amount: number; asset: string; confirmed_at: string }) => {
-    setPayments((prev) => {
-      // If payment exists, update it to confirmed and move to top
-      const exists = prev.find((p) => p.id === event.id);
-      let updatedList = prev;
-      
-      if (exists) {
-        updatedList = prev.map((p) => 
-          p.id === event.id ? { ...p, status: "confirmed" } : p
-        );
-      } else {
-        // Brand new payment arrived confirmed
-        updatedList = [
-          {
-            id: event.id,
-            amount: event.amount,
-            asset: event.asset,
-            status: "confirmed",
-            description: "Real-time payment",
-            created_at: event.confirmed_at,
-          },
-          ...prev,
-        ];
-      }
-      
-      // Sort to ensure highest items are top
-      return updatedList
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, 10);
-    });
-  }, []);
+  const handleConfirmed = useCallback(
+    (event: {
+      id: string;
+      amount: number;
+      asset: string;
+      confirmed_at: string;
+    }) => {
+      setPayments((prev) => {
+        // If payment exists, update it to confirmed and move to top
+        const exists = prev.find((p) => p.id === event.id);
+        let updatedList = prev;
+
+        if (exists) {
+          updatedList = prev.map((p) =>
+            p.id === event.id ? { ...p, status: "confirmed" } : p,
+          );
+        } else {
+          // Brand new payment arrived confirmed
+          updatedList = [
+            {
+              id: event.id,
+              amount: event.amount,
+              asset: event.asset,
+              status: "confirmed",
+              description: "Real-time payment",
+              created_at: event.confirmed_at,
+            },
+            ...prev,
+          ];
+        }
+
+        // Sort to ensure highest items are top
+        return updatedList
+          .sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime(),
+          )
+          .slice(0, 10);
+      });
+    },
+    [],
+  );
 
   usePaymentSocket(merchantId, handleConfirmed);
 
@@ -83,7 +92,8 @@ export default function ActivityFeed() {
           return;
         }
 
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+        const apiUrl =
+          process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
         const response = await fetch(`${apiUrl}/api/payments?limit=10`, {
           headers: { "x-api-key": apiKey },
           signal: controller.signal,
@@ -95,7 +105,9 @@ export default function ActivityFeed() {
         setPayments(data.payments ?? []);
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return;
-        setError(err instanceof Error ? err.message : "Failed to load activity");
+        setError(
+          err instanceof Error ? err.message : "Failed to load activity",
+        );
       } finally {
         setLoading(false);
       }
@@ -116,15 +128,22 @@ export default function ActivityFeed() {
   }
 
   if (error) {
-    return <div className="rounded-xl border border-red-500/30 p-4 text-red-400">{error}</div>;
+    return (
+      <div className="rounded-xl border border-red-500/30 p-4 text-red-400">
+        {error}
+      </div>
+    );
   }
 
   if (payments.length === 0) {
     return (
       <div className="rounded-lg border border-[#E8E8E8] bg-[#F9F9F9] p-16 text-center flex flex-col items-center justify-center">
-        <h3 className="text-xl font-bold text-[#0A0A0A] mb-3">No activity detected</h3>
+        <h3 className="text-xl font-bold text-[#0A0A0A] mb-3">
+          No activity detected
+        </h3>
         <p className="text-[#6B6B6B] max-w-sm mb-8 font-medium">
-          Your live feed will populate here once you start receiving payments. Create a link to get started.
+          Your live feed will populate here once you start receiving payments.
+          Create a link to get started.
         </p>
         <Link
           href="/dashboard/create"
@@ -149,24 +168,40 @@ export default function ActivityFeed() {
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-[#F9F9F9] border-b border-[#E8E8E8]">
-              <th className="px-6 py-3 text-[11px] font-bold text-[#6B6B6B] uppercase tracking-wider">Status</th>
-              <th className="px-6 py-3 text-[11px] font-bold text-[#6B6B6B] uppercase tracking-wider">Description</th>
-              <th className="px-6 py-3 text-[11px] font-bold text-[#6B6B6B] uppercase tracking-wider">Date</th>
-              <th className="px-6 py-3 text-right text-[11px] font-bold text-[#6B6B6B] uppercase tracking-wider">Amount</th>
+              <th className="px-6 py-3 text-[11px] font-bold text-[#6B6B6B] uppercase tracking-wider">
+                Status
+              </th>
+              <th className="px-6 py-3 text-[11px] font-bold text-[#6B6B6B] uppercase tracking-wider">
+                Description
+              </th>
+              <th className="px-6 py-3 text-[11px] font-bold text-[#6B6B6B] uppercase tracking-wider">
+                Date
+              </th>
+              <th className="px-6 py-3 text-right text-[11px] font-bold text-[#6B6B6B] uppercase tracking-wider">
+                Amount
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#E8E8E8]">
             {payments.map((payment, i) => (
-              <tr 
-                key={payment.id} 
-                className={`group transition-all 150ms ease cursor-default hover:bg-[#F0F0F0] ${i % 2 === 0 ? "bg-white" : "bg-[#F9F9F9]"}`}
+              <tr
+                key={payment.id}
+                role="row"
+                tabIndex={0}
+                className={`group transition-all 150ms ease cursor-default hover:bg-[#F0F0F0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#4a6fa5] ${i % 2 === 0 ? "bg-white" : "bg-[#F9F9F9]"}`}
+                aria-label={`Payment ${payment.description || "Transaction"} for ${formatAmount(payment.amount, locale, hideCents)} ${payment.asset}`}
               >
                 <td className="px-6 py-4">
-                  <div className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-tight ${
-                    payment.status === "confirmed" ? "bg-[#0A0A0A] text-white" : 
-                    payment.status === "pending" ? "bg-[#F5F5F5] text-[#6B6B6B] border border-[#E8E8E8]" : 
-                    "bg-red-50 text-red-600 border border-red-100"
-                  }`}>
+                  <div
+                    className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-tight ${
+                      payment.status === "confirmed"
+                        ? "bg-[#0A0A0A] text-white"
+                        : payment.status === "pending"
+                          ? "bg-[#F5F5F5] text-[#6B6B6B] border border-[#E8E8E8]"
+                          : "bg-red-50 text-red-600 border border-red-100"
+                    }`}
+                    aria-label={`Status: ${payment.status}`}
+                  >
                     {payment.status}
                   </div>
                 </td>
@@ -176,13 +211,17 @@ export default function ActivityFeed() {
                   </p>
                 </td>
                 <td className="px-6 py-4">
-                  <p className="text-[11px] font-medium text-[#6B6B6B]">
+                  <time
+                    className="text-[11px] font-medium text-[#6B6B6B]"
+                    dateTime={payment.created_at}
+                  >
                     {new Date(payment.created_at).toLocaleDateString()}
-                  </p>
+                  </time>
                 </td>
                 <td className="px-6 py-4 text-right">
                   <p className="text-sm font-bold text-[#0A0A0A]">
-                    {formatAmount(payment.amount, locale, hideCents)} {payment.asset}
+                    {formatAmount(payment.amount, locale, hideCents)}{" "}
+                    {payment.asset}
                   </p>
                 </td>
               </tr>
