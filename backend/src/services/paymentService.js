@@ -4,6 +4,7 @@ import {
   findMatchingPayment,
   createRefundTransaction,
   findStrictReceivePaths,
+  verifyTransactionSignature,
 } from "../lib/stellar.js";
 import { resolveBrandingConfig } from "../lib/branding.js";
 import { sendWebhook } from "../lib/webhooks.js";
@@ -98,7 +99,7 @@ export const paymentService = {
     const now = new Date().toISOString();
     const paymentLinkBase = process.env.PAYMENT_LINK_BASE || "http://localhost:3000";
     const paymentLink = `${paymentLinkBase}/pay/${paymentId}`;
-    
+
     const resolvedBranding = resolveBrandingConfig({
       merchantBranding: merchant.branding_config,
       brandingOverrides: body.branding_overrides,
@@ -244,6 +245,15 @@ export const paymentService = {
       memoType: data.memo_type,
     });
 
+    if (match) {
+      const isSignatureValid = await verifyTransactionSignature(
+        match.transaction_hash,
+      );
+      if (!isSignatureValid) {
+        return { status: "pending" };
+      }
+    }
+
     if (!match) {
       return { status: "pending" };
     }
@@ -255,8 +265,8 @@ export const paymentService = {
 
     const { error: updateError } = await supabase
       .from("payments")
-      .update({ 
-        status: "confirmed", 
+      .update({
+        status: "confirmed",
         tx_id: match.transaction_hash,
         completion_duration_seconds: Math.floor(latencySeconds)
       })

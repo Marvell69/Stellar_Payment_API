@@ -10,7 +10,11 @@
  */
 
 import { supabase } from "./supabase.js";
-import { findMatchingPayment, findAnyRecentPayment } from "./stellar.js";
+import {
+  findMatchingPayment,
+  findAnyRecentPayment,
+  verifyTransactionSignature,
+} from "./stellar.js";
 import { sendWebhook, isEventSubscribed } from "./webhooks.js";
 import { sendReceiptEmail } from "./email.js";
 import { renderReceiptEmail } from "./email-templates.js";
@@ -111,6 +115,20 @@ async function checkPayment(payment) {
       memoType: payment.memo_type,
       createdAt: payment.created_at,
     });
+
+    if (match) {
+      // Verify signature for added robustness
+      const isSignatureValid = await verifyTransactionSignature(
+        match.transaction_hash,
+      );
+      if (!isSignatureValid) {
+        logger.warn(
+          { paymentId: payment.id, txHash: match.transaction_hash },
+          "Horizon poller: matching transaction found but signature verification failed — skipping",
+        );
+        return;
+      }
+    }
 
     if (!match) {
       logger.info({ paymentId: payment.id }, "Horizon poller: no match yet");
