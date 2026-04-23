@@ -21,8 +21,6 @@ interface Payment {
   created_at: string;
 }
 
-const SKELETON_ITEMS = [0, 1, 2];
-
 interface PaymentRowProps {
   payment: Payment;
   index: number;
