@@ -131,16 +131,16 @@ export default function RegistrationForm() {
 
   if (registeredMerchant) {
     return (
-      <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="rounded-[3rem] border border-[#E8E8E8] bg-white p-12 shadow-[0_20px_60px_rgb(0,0,0,0.05)]">
-          <div className="flex flex-col gap-4 text-center sm:text-left mb-8">
+      <div className="flex flex-col gap-6 sm:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500 w-full">
+        <div className="rounded-[2rem] sm:rounded-[3rem] border border-[#E8E8E8] bg-white p-6 sm:p-12 shadow-[0_20px_60px_rgb(0,0,0,0.05)]">
+          <div className="flex flex-col gap-3 sm:gap-4 text-center sm:text-left mb-6 sm:mb-8">
             <p className="font-bold text-[10px] uppercase tracking-[0.4em] text-[#6B6B6B]">
               Success
             </p>
-            <h2 className="text-4xl font-bold text-[#0A0A0A] font-serif tracking-tight uppercase">
+            <h2 className="text-3xl sm:text-4xl font-bold text-[#0A0A0A] font-serif tracking-tight uppercase">
               Welcome, {registeredMerchant.business_name}
             </h2>
-            <p className="text-sm font-medium text-[#6B6B6B] leading-relaxed">
+            <p className="text-xs sm:text-sm font-medium text-[#6B6B6B] leading-relaxed">
               Your merchant account is ready. Save your API key below—you
               won&apos;t be able to access it again.
             </p>
@@ -164,7 +164,7 @@ export default function RegistrationForm() {
 
         <a
           href="/dashboard"
-          className="text-center text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B] transition-colors underline underline-offset-8 hover:text-[#0A0A0A]"
+          className="text-center text-[10px] font-bold uppercase tracking-widest text-[#6B6B6B] transition-colors underline underline-offset-8 hover:text-[#0A0A0A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-500)] focus-visible:ring-offset-2 rounded-sm"
         >
           Enter Dashboard
         </a>
@@ -200,7 +200,7 @@ export default function RegistrationForm() {
             }}
             aria-invalid={Boolean(businessNameError)}
             aria-describedby={businessNameError ? "business-name-error" : undefined}
-            className={`rounded-2xl border bg-[#F9F9F9] p-4 text-sm font-bold text-[#0A0A0A] placeholder-[#A0A0A0] transition-all focus:bg-white focus:outline-none ${
+            className={`w-full rounded-2xl border bg-[#F9F9F9] p-3 sm:p-4 text-sm font-bold text-[#0A0A0A] placeholder-[#A0A0A0] transition-all focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-500)] focus-visible:ring-offset-1 ${
               businessNameError 
                 ? "border-red-500/50 focus:border-red-500" 
                 : "border-[#E8E8E8] focus:border-[#0A0A0A]"
@@ -233,7 +233,7 @@ export default function RegistrationForm() {
             }}
             aria-invalid={Boolean(emailError)}
             aria-describedby={emailError ? "primary-email-error" : undefined}
-            className={`rounded-2xl border bg-[#F9F9F9] p-4 text-sm font-bold text-[#0A0A0A] placeholder-[#A0A0A0] transition-all focus:bg-white focus:outline-none ${
+            className={`w-full rounded-2xl border bg-[#F9F9F9] p-3 sm:p-4 text-sm font-bold text-[#0A0A0A] placeholder-[#A0A0A0] transition-all focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-500)] focus-visible:ring-offset-1 ${
               emailError 
                 ? "border-red-500/50 focus:border-red-500" 
                 : "border-[#E8E8E8] focus:border-[#0A0A0A]"
@@ -265,7 +265,7 @@ export default function RegistrationForm() {
             }}
             aria-invalid={Boolean(passwordError)}
             aria-describedby={passwordError ? "password-error" : undefined}
-            className={`rounded-2xl border bg-[#F9F9F9] p-4 text-sm font-bold text-[#0A0A0A] placeholder-[#A0A0A0] transition-all focus:bg-white focus:outline-none ${
+            className={`w-full rounded-2xl border bg-[#F9F9F9] p-3 sm:p-4 text-sm font-bold text-[#0A0A0A] placeholder-[#A0A0A0] transition-all focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-500)] focus-visible:ring-offset-1 ${
               passwordError 
                 ? "border-red-500/50 focus:border-red-500" 
                 : "border-[#E8E8E8] focus:border-[#0A0A0A]"
@@ -328,7 +328,7 @@ export default function RegistrationForm() {
             aria-describedby={
               notificationEmailError ? "notification-email-error" : undefined
             }
-            className={`rounded-2xl border bg-[#F9F9F9] p-4 text-sm font-bold text-[#0A0A0A] placeholder-[#A0A0A0] transition-all focus:bg-white focus:outline-none ${
+            className={`w-full rounded-2xl border bg-[#F9F9F9] p-3 sm:p-4 text-sm font-bold text-[#0A0A0A] placeholder-[#A0A0A0] transition-all focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-500)] focus-visible:ring-offset-1 ${
               notificationEmailError 
                 ? "border-red-500/50 focus:border-red-500" 
                 : "border-[#E8E8E8] focus:border-[#0A0A0A]"
@@ -350,7 +350,7 @@ export default function RegistrationForm() {
       <button
         type="submit"
         disabled={loading || !isFormValid}
-        className="group relative flex h-16 items-center justify-center rounded-2xl bg-[#0A0A0A] px-8 text-[10px] font-bold uppercase tracking-[0.3em] text-white transition-all hover:bg-black shadow-xl shadow-black/10 disabled:cursor-not-allowed disabled:opacity-50"
+        className="group relative flex h-14 sm:h-16 w-full items-center justify-center rounded-2xl bg-[var(--pluto-500)] px-6 sm:px-8 text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] sm:tracking-[0.3em] text-white transition-all hover:bg-[var(--pluto-600)] shadow-xl shadow-[var(--pluto-500)]/20 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pluto-500)] focus-visible:ring-offset-2"
       >
         {loading ? (
           <span className="flex items-center gap-3">

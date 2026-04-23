@@ -5,11 +5,11 @@ import GuestGuard from "@/components/GuestGuard";
 export default function RegisterPage() {
   return (
     <GuestGuard>
-    <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-10 px-6 py-14 md:py-20 bg-white">
-      <header className="flex flex-col gap-6 text-center">
+    <main className="mx-auto flex min-h-screen w-full max-w-lg flex-col justify-center gap-8 sm:gap-10 px-4 sm:px-6 py-10 sm:py-14 md:py-20 bg-white">
+      <header className="flex flex-col gap-4 sm:gap-6 text-center">
         <p className="font-bold text-[10px] uppercase tracking-[0.4em] text-[#6B6B6B]">Onboarding</p>
-        <h1 className="text-4xl md:text-5xl font-bold text-[#0A0A0A] tracking-tight font-serif uppercase">Join PLUTO</h1>
-        <p className="text-sm font-medium text-[#6B6B6B] leading-relaxed">
+        <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-[#0A0A0A] tracking-tight font-serif uppercase">Join PLUTO</h1>
+        <p className="text-xs sm:text-sm font-medium text-[#6B6B6B] leading-relaxed">
           Create your merchant profile to start accepting modern payments and managing assets on the PLUTO infrastructure.
         </p>
       </header>
